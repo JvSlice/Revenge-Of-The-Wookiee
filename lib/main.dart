@@ -37,12 +37,17 @@ class GameConfig {
   static const double fireCooldown = 0.24;
 
   // Fixed crosshair position
-  static const double crosshairY = 0.58;
+  // Increased from 0.58 so the aim point sits lower on screen.
+  static const double crosshairY = 0.66;
 
-  // Auto-aim / hit tuning
-  static const double hitPadding = 10.0;
+  // Auto-hit tuning
+  static const double hitPadding = 14.0;
   static const double centerBias = 0.70;
-  static const double closeRangeBonus = 0.55;
+  static const double closeRangeBonus = 0.85;
+
+  // Very close enemies get generous hit rules
+  static const double emergencyHitDistance = 2.6;
+  static const double emergencyHitPadding = 42.0;
 
   // Spawning / enemies
   static const double spawnStart = 1.55;
@@ -367,10 +372,15 @@ class _GamePageState extends State<GamePage>
       final dx = (enemyScreen.dx - crosshair.dx).abs();
       final dy = (enemyScreen.dy - crosshair.dy).abs();
 
-      final bool directlyHit = dx <= (radius + GameConfig.hitPadding) &&
+      final bool directlyHit =
+          dx <= (radius + GameConfig.hitPadding) &&
           dy <= (radius + GameConfig.hitPadding);
 
-      if (!directlyHit) {
+      final bool emergencyCloseHit =
+          enemy.distance <= GameConfig.emergencyHitDistance &&
+          dx <= (radius + GameConfig.emergencyHitPadding);
+
+      if (!directlyHit && !emergencyCloseHit) {
         continue;
       }
 
@@ -380,11 +390,16 @@ class _GamePageState extends State<GamePage>
       final double closenessBonus =
           (1.0 / math.max(enemy.distance, 1.0)) * GameConfig.closeRangeBonus;
 
-      final double score =
-          centerDistance * GameConfig.centerBias - closenessBonus;
+      final double emergencyBonus =
+          enemy.distance <= GameConfig.emergencyHitDistance ? 0.75 : 0.0;
 
-      if (score < bestScore) {
-        bestScore = score;
+      final double scoreValue =
+          centerDistance * GameConfig.centerBias -
+          closenessBonus -
+          emergencyBonus;
+
+      if (scoreValue < bestScore) {
+        bestScore = scoreValue;
         bestTarget = enemy;
       }
     }
@@ -746,7 +761,7 @@ class _GamePageState extends State<GamePage>
               ),
               const SizedBox(height: 18),
               const Text(
-                'Move stick: dodge left and right\nCrosshair is fixed center\nFire button: shoot\nPause button: top right',
+                'Move stick: dodge left and right\nCrosshair is fixed lower center\nFire button: shoot\nPause button: top right',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 22),
