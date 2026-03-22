@@ -698,7 +698,7 @@ class _GamePageState extends State<GamePage>
   }
 
   Rect _calcFireButtonRect(Size size) {
-    final buttonSize = math.min(size.width * 0.16, 92);
+    final buttonSize = math.min(size.width * 0.16, 92.0);
     return Rect.fromLTWH(
       size.width - buttonSize - 18,
       size.height - buttonSize - 90,
