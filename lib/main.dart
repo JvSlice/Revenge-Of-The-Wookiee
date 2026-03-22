@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 void main() {
   runApp(const CanopyDefenseApp());
@@ -82,21 +83,14 @@ class Enemy {
 }
 
 class ShotTrace {
-  ShotTrace({
-    required this.start,
-    required this.end,
-  });
+  ShotTrace({required this.start, required this.end});
 
   Offset start;
   Offset end;
   double life = 0.10;
 }
 
-enum GameState {
-  playing,
-  won,
-  lost,
-}
+enum GameState { playing, won, lost }
 
 /// ============================================================
 /// GAME PAGE
@@ -108,7 +102,8 @@ class GamePage extends StatefulWidget {
   State<GamePage> createState() => _GamePageState();
 }
 
-class _GamePageState extends State<GamePage> with SingleTickerProviderStateMixin {
+class _GamePageState extends State<GamePage>
+    with SingleTickerProviderStateMixin {
   late final Ticker _ticker;
   Duration _lastTick = Duration.zero;
 
@@ -228,9 +223,11 @@ class _GamePageState extends State<GamePage> with SingleTickerProviderStateMixin
   }
 
   void _updateSpawning(double dt) {
-    currentSpawnInterval =
-        math.max(GameConfig.spawnIntervalMin,
-            GameConfig.spawnIntervalStart - survivalTime * GameConfig.spawnDifficultyRampPerSecond);
+    currentSpawnInterval = math.max(
+      GameConfig.spawnIntervalMin,
+      GameConfig.spawnIntervalStart -
+          survivalTime * GameConfig.spawnDifficultyRampPerSecond,
+    );
 
     spawnTimer += dt;
     if (spawnTimer >= currentSpawnInterval) {
@@ -240,11 +237,14 @@ class _GamePageState extends State<GamePage> with SingleTickerProviderStateMixin
   }
 
   void _spawnEnemy() {
-    final distance = _rng.nextDouble() *
-            (GameConfig.enemyStartDistanceMax - GameConfig.enemyStartDistanceMin) +
+    final distance =
+        _rng.nextDouble() *
+            (GameConfig.enemyStartDistanceMax -
+                GameConfig.enemyStartDistanceMin) +
         GameConfig.enemyStartDistanceMin;
 
-    final speed = GameConfig.enemyBaseSpeed +
+    final speed =
+        GameConfig.enemyBaseSpeed +
         (survivalTime * GameConfig.enemySpeedRampPerSecond) +
         _rng.nextDouble() * 0.7;
 
@@ -307,7 +307,11 @@ class _GamePageState extends State<GamePage> with SingleTickerProviderStateMixin
     fireCooldownTimer = GameConfig.fireCooldown;
 
     final start = Offset(size.width / 2, size.height * 0.82);
-    final aimScreenX = _worldXToScreen(aimX, GameConfig.shotEffectiveDistance, size);
+    final aimScreenX = _worldXToScreen(
+      aimX,
+      GameConfig.shotEffectiveDistance,
+      size,
+    );
     final end = Offset(aimScreenX, size.height * 0.42);
 
     traces.add(ShotTrace(start: start, end: end));
@@ -318,8 +322,10 @@ class _GamePageState extends State<GamePage> with SingleTickerProviderStateMixin
     for (final enemy in enemies) {
       if (!enemy.isAlive) continue;
 
-      final tolerance = GameConfig.shotAimToleranceBase +
-          (GameConfig.enemyStartDistanceMax - enemy.distance) * GameConfig.shotAimToleranceFarBonus;
+      final tolerance =
+          GameConfig.shotAimToleranceBase +
+          (GameConfig.enemyStartDistanceMax - enemy.distance) *
+              GameConfig.shotAimToleranceFarBonus;
 
       final aligned = (enemy.x - aimX).abs() <= tolerance;
       if (aligned && enemy.distance < bestDistance) {
@@ -557,7 +563,10 @@ class _GamePageState extends State<GamePage> with SingleTickerProviderStateMixin
               const SizedBox(height: 12),
               Text(
                 'Final Score: $score',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               const SizedBox(height: 6),
               Text(
@@ -628,7 +637,12 @@ class GamePainter extends CustomPainter {
 
   void _paintBackground(Canvas canvas, Size size) {
     final skyRect = Rect.fromLTWH(0, 0, size.width, size.height * 0.52);
-    final groundRect = Rect.fromLTWH(0, size.height * 0.52, size.width, size.height * 0.48);
+    final groundRect = Rect.fromLTWH(
+      0,
+      size.height * 0.52,
+      size.width,
+      size.height * 0.48,
+    );
 
     final skyPaint = Paint()
       ..shader = const LinearGradient(
@@ -671,7 +685,11 @@ class GamePainter extends CustomPainter {
         ),
         trunkPaint,
       );
-      canvas.drawCircle(Offset(x, size.height * 0.44 - (i % 3) * 8), 24 + (i % 3) * 6, canopyPaint);
+      canvas.drawCircle(
+        Offset(x, size.height * 0.44 - (i % 3) * 8),
+        24 + (i % 3) * 6,
+        canopyPaint,
+      );
     }
   }
 
@@ -694,7 +712,8 @@ class GamePainter extends CustomPainter {
   }
 
   void _paintEnemies(Canvas canvas, Size size) {
-    final sorted = [...enemies]..sort((a, b) => b.distance.compareTo(a.distance));
+    final sorted = [...enemies]
+      ..sort((a, b) => b.distance.compareTo(a.distance));
 
     for (final enemy in sorted) {
       final x = worldXToScreen(enemy.x - playerX, enemy.distance, size);
@@ -713,21 +732,41 @@ class GamePainter extends CustomPainter {
         ..strokeCap = StrokeCap.round;
 
       // legs
-      canvas.drawLine(Offset(x - r * 0.25, y + r * 0.75), Offset(x - r * 0.45, y + r * 1.35), limbPaint);
-      canvas.drawLine(Offset(x + r * 0.25, y + r * 0.75), Offset(x + r * 0.45, y + r * 1.35), limbPaint);
+      canvas.drawLine(
+        Offset(x - r * 0.25, y + r * 0.75),
+        Offset(x - r * 0.45, y + r * 1.35),
+        limbPaint,
+      );
+      canvas.drawLine(
+        Offset(x + r * 0.25, y + r * 0.75),
+        Offset(x + r * 0.45, y + r * 1.35),
+        limbPaint,
+      );
 
       // body
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromCenter(center: Offset(x, y), width: r * 1.1, height: r * 1.5),
+          Rect.fromCenter(
+            center: Offset(x, y),
+            width: r * 1.1,
+            height: r * 1.5,
+          ),
           Radius.circular(r * 0.18),
         ),
         bodyPaint,
       );
 
       // arms
-      canvas.drawLine(Offset(x - r * 0.5, y - r * 0.05), Offset(x - r * 1.0, y + r * 0.3), limbPaint);
-      canvas.drawLine(Offset(x + r * 0.5, y - r * 0.05), Offset(x + r * 1.0, y + r * 0.3), limbPaint);
+      canvas.drawLine(
+        Offset(x - r * 0.5, y - r * 0.05),
+        Offset(x - r * 1.0, y + r * 0.3),
+        limbPaint,
+      );
+      canvas.drawLine(
+        Offset(x + r * 0.5, y - r * 0.05),
+        Offset(x + r * 1.0, y + r * 0.3),
+        limbPaint,
+      );
 
       // head
       canvas.drawCircle(Offset(x, y - r * 0.95), r * 0.42, bodyPaint);
@@ -744,9 +783,19 @@ class GamePainter extends CustomPainter {
 
     final weaponPath = Path()
       ..moveTo(center.dx - 90, center.dy)
-      ..quadraticBezierTo(center.dx - 65, center.dy - 20, center.dx - 20, center.dy - 16)
+      ..quadraticBezierTo(
+        center.dx - 65,
+        center.dy - 20,
+        center.dx - 20,
+        center.dy - 16,
+      )
       ..lineTo(center.dx + 20, center.dy - 16)
-      ..quadraticBezierTo(center.dx + 65, center.dy - 20, center.dx + 90, center.dy)
+      ..quadraticBezierTo(
+        center.dx + 65,
+        center.dy - 20,
+        center.dx + 90,
+        center.dy,
+      )
       ..lineTo(center.dx + 50, center.dy + 24)
       ..lineTo(center.dx - 50, center.dy + 24)
       ..close();
@@ -755,7 +804,11 @@ class GamePainter extends CustomPainter {
 
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromCenter(center: Offset(center.dx, center.dy - 18), width: 26, height: 36),
+        Rect.fromCenter(
+          center: Offset(center.dx, center.dy - 18),
+          width: 26,
+          height: 36,
+        ),
         const Radius.circular(8),
       ),
       accentPaint,
@@ -765,7 +818,9 @@ class GamePainter extends CustomPainter {
   void _paintTraces(Canvas canvas, Size size) {
     for (final trace in traces) {
       final p = Paint()
-        ..color = GameConfig.accent.withOpacity((trace.life / 0.10).clamp(0.0, 1.0))
+        ..color = GameConfig.accent.withOpacity(
+          (trace.life / 0.10).clamp(0.0, 1.0),
+        )
         ..strokeWidth = 3
         ..strokeCap = StrokeCap.round;
 
@@ -783,7 +838,10 @@ class GamePainter extends CustomPainter {
 
     canvas.drawCircle(Offset(x, y), 16, paint..style = PaintingStyle.stroke);
     paint.style = PaintingStyle.fill;
-    canvas.drawRect(Rect.fromCenter(center: Offset(x, y), width: 3, height: 3), paint);
+    canvas.drawRect(
+      Rect.fromCenter(center: Offset(x, y), width: 3, height: 3),
+      paint,
+    );
 
     canvas.drawLine(Offset(x - 24, y), Offset(x - 10, y), paint);
     canvas.drawLine(Offset(x + 10, y), Offset(x + 24, y), paint);
