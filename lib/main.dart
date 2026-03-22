@@ -490,8 +490,8 @@ class _GamePageState extends State<GamePage>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.35),
-        border: Border.all(color: GameConfig.accent.withOpacity(0.5)),
+        color: Colors.black.withValues(alpha:0.35),
+        border: Border.all(color: GameConfig.accent.withValues(alpha: .5)),
         borderRadius: BorderRadius.circular(18),
       ),
       child: Text(
@@ -505,13 +505,13 @@ class _GamePageState extends State<GamePage>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.30),
+        color: Colors.black.withValues (alpha:0.30),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
         text,
         style: TextStyle(
-          color: Colors.white.withOpacity(0.82),
+          color: Colors.white.withValues (alpha: .82),
           fontSize: 12,
           fontWeight: FontWeight.w600,
         ),
@@ -523,7 +523,7 @@ class _GamePageState extends State<GamePage>
     final won = state == GameState.won;
 
     return Container(
-      color: Colors.black.withOpacity(0.62),
+      color: Colors.black.withValues (alpha: 0.62),
       child: Center(
         child: Container(
           width: 320,
@@ -531,7 +531,7 @@ class _GamePageState extends State<GamePage>
           decoration: BoxDecoration(
             color: const Color(0xFF10161C),
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: GameConfig.accent.withOpacity(0.5)),
+            border: Border.all(color: GameConfig.accent.withValues(alpha: 0.5)),
             boxShadow: const [
               BoxShadow(
                 blurRadius: 18,
@@ -662,7 +662,7 @@ class GamePainter extends CustomPainter {
     canvas.drawRect(groundRect, groundPaint);
 
     final horizonPaint = Paint()
-      ..color = GameConfig.accent.withOpacity(0.15)
+      ..color = GameConfig.accent.withValues(alpha: 0.15)
       ..strokeWidth = 2;
     canvas.drawLine(
       Offset(0, size.height * 0.52),
@@ -695,7 +695,7 @@ class GamePainter extends CustomPainter {
 
   void _paintDepthLines(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.white.withOpacity(0.06)
+      ..color = Colors.white.withValues(alpha: 0.06)
       ..strokeWidth = 1;
 
     final centerX = size.width / 2 - playerX * 12;
@@ -723,7 +723,7 @@ class GamePainter extends CustomPainter {
       final bodyPaint = Paint()
         ..color = enemy.isAlive
             ? enemy.color
-            : Colors.white.withOpacity(enemy.hitFlash.clamp(0.0, 1.0));
+            : Colors.white.withValues(alpha: enemy.hitFlash.clamp(0.0, 1.0));
 
       final eyePaint = Paint()..color = Colors.redAccent;
       final limbPaint = Paint()
@@ -777,7 +777,7 @@ class GamePainter extends CustomPainter {
 
   void _paintWeaponOverlay(Canvas canvas, Size size) {
     final basePaint = Paint()..color = const Color(0xFF4B2F1B);
-    final accentPaint = Paint()..color = GameConfig.accent.withOpacity(0.35);
+    final accentPaint = Paint()..color = GameConfig.accent.withValues(alpha: 0.35);
 
     final center = Offset(size.width / 2, size.height * 0.90);
 
@@ -818,7 +818,7 @@ class GamePainter extends CustomPainter {
   void _paintTraces(Canvas canvas, Size size) {
     for (final trace in traces) {
       final p = Paint()
-        ..color = GameConfig.accent.withOpacity(
+        ..color = GameConfig.accent.withValues( alpha: 
           (trace.life / 0.10).clamp(0.0, 1.0),
         )
         ..strokeWidth = 3
@@ -833,7 +833,7 @@ class GamePainter extends CustomPainter {
     final y = size.height * 0.56;
 
     final paint = Paint()
-      ..color = GameConfig.accent.withOpacity(0.92)
+      ..color = GameConfig.accent.withValues(alpha: 0.92)
       ..strokeWidth = 2;
 
     canvas.drawCircle(Offset(x, y), 16, paint..style = PaintingStyle.stroke);
