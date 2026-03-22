@@ -25,20 +25,24 @@ class CanopyDefenseApp extends StatelessWidget {
 /// Tweak game feel here first.
 /// ============================================================
 class GameConfig {
-  // Game rules
+  // Rules
   static const int maxHealth = 5;
   static const int winScore = 35;
 
-  // Movement / aim
+  // Movement
   static const double moveSpeed = 4.2;
-  static const double aimSpeed = 4.6;
-  static const double aimClamp = 4.0;
   static const double playerClamp = 4.4;
 
   // Combat
   static const double fireCooldown = 0.24;
-  static const double shotToleranceBase = 0.42;
-  static const double shotToleranceNearBonus = 0.018;
+
+  // Fixed crosshair position
+  static const double crosshairY = 0.58;
+
+  // Auto-aim / hit tuning
+  static const double hitPadding = 10.0;
+  static const double centerBias = 0.70;
+  static const double closeRangeBonus = 0.55;
 
   // Spawning / enemies
   static const double spawnStart = 1.55;
@@ -50,10 +54,6 @@ class GameConfig {
   static const double enemyBaseSpeed = 2.7;
   static const double enemySpeedRamp = 0.04;
   static const double enemyLaneSpread = 3.8;
-
-  // Aim visual tuning
-  static const double crosshairDepth = 16.0;
-  static const double crosshairY = 0.58;
 
   // Colors
   static const Color accent = Color(0xFF92FF8F);
@@ -102,7 +102,7 @@ class ShotTrace {
 }
 
 /// ============================================================
-/// SIMPLE VIRTUAL STICK
+/// SIMPLE MOVE STICK
 /// ============================================================
 class StickState {
   int? pointerId;
@@ -153,16 +153,14 @@ class _GamePageState extends State<GamePage>
   double spawnInterval = GameConfig.spawnStart;
   double fireCooldownTimer = 0.0;
 
-  // World / aim state
+  // World state
   double playerX = 0.0;
-  double aimX = 0.0;
   double bobTime = 0.0;
 
   final List<Enemy> enemies = [];
   final List<ShotTrace> traces = [];
 
-  final StickState leftStick = StickState();
-  final StickState rightStick = StickState();
+  final StickState moveStick = StickState();
 
   bool firePressed = false;
   Rect fireButtonRect = Rect.zero;
@@ -208,12 +206,10 @@ class _GamePageState extends State<GamePage>
       spawnInterval = GameConfig.spawnStart;
       fireCooldownTimer = 0.0;
       playerX = 0.0;
-      aimX = 0.0;
       bobTime = 0.0;
       enemies.clear();
       traces.clear();
-      leftStick.stop();
-      rightStick.stop();
+      moveStick.stop();
       firePressed = false;
       _lastTick = Duration.zero;
     });
@@ -223,8 +219,7 @@ class _GamePageState extends State<GamePage>
     setState(() {
       if (state == GameState.playing) {
         state = GameState.paused;
-        leftStick.stop();
-        rightStick.stop();
+        moveStick.stop();
         firePressed = false;
       } else if (state == GameState.paused) {
         state = GameState.playing;
@@ -236,8 +231,7 @@ class _GamePageState extends State<GamePage>
   void _quitToMenu() {
     setState(() {
       state = GameState.menu;
-      leftStick.stop();
-      rightStick.stop();
+      moveStick.stop();
       firePressed = false;
       _lastTick = Duration.zero;
     });
@@ -261,21 +255,13 @@ class _GamePageState extends State<GamePage>
 
   void _updateControls(double dt) {
     double moveInput = 0.0;
-    double aimInput = 0.0;
 
-    if (leftStick.active) {
-      moveInput = (leftStick.delta.dx / 55.0).clamp(-1.0, 1.0);
-    }
-
-    if (rightStick.active) {
-      aimInput = (rightStick.delta.dx / 55.0).clamp(-1.0, 1.0);
+    if (moveStick.active) {
+      moveInput = (moveStick.delta.dx / 55.0).clamp(-1.0, 1.0);
     }
 
     playerX += moveInput * GameConfig.moveSpeed * dt;
-    aimX += aimInput * GameConfig.aimSpeed * dt;
-
     playerX = playerX.clamp(-GameConfig.playerClamp, GameConfig.playerClamp);
-    aimX = aimX.clamp(-GameConfig.aimClamp, GameConfig.aimClamp);
 
     bobTime += dt * (1.0 + moveInput.abs() * 2.0);
   }
@@ -369,25 +355,43 @@ class _GamePageState extends State<GamePage>
       ),
     );
 
-    Enemy? best;
-    double closest = double.infinity;
+    Enemy? bestTarget;
+    double bestScore = double.infinity;
 
     for (final enemy in enemies) {
       if (!enemy.alive) continue;
 
-      final tolerance = GameConfig.shotToleranceBase +
-          ((GameConfig.enemyStartDistanceMax - enemy.distance) *
-              GameConfig.shotToleranceNearBonus);
+      final enemyScreen = _enemyScreenPosition(enemy, size);
+      final radius = _enemyRadius(enemy.distance);
 
-      if ((enemy.x - aimX).abs() <= tolerance && enemy.distance < closest) {
-        closest = enemy.distance;
-        best = enemy;
+      final dx = (enemyScreen.dx - crosshair.dx).abs();
+      final dy = (enemyScreen.dy - crosshair.dy).abs();
+
+      final bool directlyHit = dx <= (radius + GameConfig.hitPadding) &&
+          dy <= (radius + GameConfig.hitPadding);
+
+      if (!directlyHit) {
+        continue;
+      }
+
+      final double centerDistance =
+          (enemyScreen - crosshair).distance / math.max(radius, 1.0);
+
+      final double closenessBonus =
+          (1.0 / math.max(enemy.distance, 1.0)) * GameConfig.closeRangeBonus;
+
+      final double score =
+          centerDistance * GameConfig.centerBias - closenessBonus;
+
+      if (score < bestScore) {
+        bestScore = score;
+        bestTarget = enemy;
       }
     }
 
-    if (best != null) {
-      best.alive = false;
-      best.flash = 0.18;
+    if (bestTarget != null) {
+      bestTarget.alive = false;
+      bestTarget.flash = 0.18;
       score += 1;
     }
   }
@@ -409,31 +413,22 @@ class _GamePageState extends State<GamePage>
       return;
     }
 
-    if (p.dx < size.width * 0.5 && !leftStick.active) {
-      leftStick.start(event.pointer, p);
-      return;
-    }
-
-    if (p.dx >= size.width * 0.5 && !rightStick.active) {
-      rightStick.start(event.pointer, p);
+    if (!moveStick.active) {
+      moveStick.start(event.pointer, p);
     }
   }
 
   void _handlePointerMove(PointerMoveEvent event) {
     if (state != GameState.playing) return;
 
-    if (event.pointer == leftStick.pointerId) {
-      leftStick.update(event.localPosition);
-    } else if (event.pointer == rightStick.pointerId) {
-      rightStick.update(event.localPosition);
+    if (event.pointer == moveStick.pointerId) {
+      moveStick.update(event.localPosition);
     }
   }
 
   void _handlePointerUp(PointerEvent event) {
-    if (event.pointer == leftStick.pointerId) {
-      leftStick.stop();
-    } else if (event.pointer == rightStick.pointerId) {
-      rightStick.stop();
+    if (event.pointer == moveStick.pointerId) {
+      moveStick.stop();
     }
     firePressed = false;
   }
@@ -454,9 +449,16 @@ class _GamePageState extends State<GamePage>
     return (235 * perspective).clamp(12.0, 85.0);
   }
 
+  Offset _enemyScreenPosition(Enemy enemy, Size size) {
+    return Offset(
+      _worldXToScreen(enemy.x - playerX, enemy.distance, size),
+      _enemyScreenY(enemy.distance, size),
+    );
+  }
+
   Offset _crosshairScreenPosition(Size size) {
     return Offset(
-      _worldXToScreen(aimX, GameConfig.crosshairDepth, size),
+      size.width / 2,
       size.height * GameConfig.crosshairY,
     );
   }
@@ -498,7 +500,6 @@ class _GamePageState extends State<GamePage>
                     enemies: enemies,
                     traces: traces,
                     playerX: playerX,
-                    aimX: aimX,
                     bobTime: bobTime,
                     state: state,
                     firePressed: firePressed,
@@ -524,7 +525,6 @@ class _GamePageState extends State<GamePage>
 
   Widget _buildHud(Size size) {
     final leftCenter = Offset(85, size.height - 95);
-    final rightCenter = Offset(size.width - 105, size.height - 210);
 
     return SafeArea(
       child: Stack(
@@ -577,16 +577,10 @@ class _GamePageState extends State<GamePage>
             ),
           ),
           _buildStickVisual(
-            center: leftStick.active ? leftStick.center : leftCenter,
-            knob: leftStick.active ? leftStick.current : leftCenter,
+            center: moveStick.active ? moveStick.center : leftCenter,
+            knob: moveStick.active ? moveStick.current : leftCenter,
             label: 'MOVE',
-            active: leftStick.active,
-          ),
-          _buildStickVisual(
-            center: rightStick.active ? rightStick.center : rightCenter,
-            knob: rightStick.active ? rightStick.current : rightCenter,
-            label: 'AIM',
-            active: rightStick.active,
+            active: moveStick.active,
           ),
           Positioned(
             right: 18,
@@ -752,7 +746,7 @@ class _GamePageState extends State<GamePage>
               ),
               const SizedBox(height: 18),
               const Text(
-                'Left stick: move\nRight stick: aim\nFire button: shoot\nPause button: top right',
+                'Move stick: dodge left and right\nCrosshair is fixed center\nFire button: shoot\nPause button: top right',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 22),
@@ -906,7 +900,6 @@ class RedwoodPainter extends CustomPainter {
     required this.enemies,
     required this.traces,
     required this.playerX,
-    required this.aimX,
     required this.bobTime,
     required this.state,
     required this.firePressed,
@@ -920,7 +913,6 @@ class RedwoodPainter extends CustomPainter {
   final List<Enemy> enemies;
   final List<ShotTrace> traces;
   final double playerX;
-  final double aimX;
   final double bobTime;
   final GameState state;
   final bool firePressed;
