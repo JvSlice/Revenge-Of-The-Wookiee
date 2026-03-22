@@ -22,19 +22,25 @@ class CanopyDefenseApp extends StatelessWidget {
 
 /// ============================================================
 /// HACKABLE CONSTANTS
-/// Change values here first to tune game feel.
+/// Tweak game feel here first.
 /// ============================================================
 class GameConfig {
+  // Game rules
   static const int maxHealth = 5;
   static const int winScore = 35;
 
+  // Movement / aim
   static const double moveSpeed = 4.2;
-  static const double aimSpeed = 4.8;
-  static const double aimClamp = 4.8;
+  static const double aimSpeed = 4.6;
+  static const double aimClamp = 4.0;
   static const double playerClamp = 4.4;
 
+  // Combat
   static const double fireCooldown = 0.24;
+  static const double shotToleranceBase = 0.42;
+  static const double shotToleranceNearBonus = 0.018;
 
+  // Spawning / enemies
   static const double spawnStart = 1.55;
   static const double spawnMin = 0.42;
   static const double spawnRampPerSecond = 0.014;
@@ -45,15 +51,15 @@ class GameConfig {
   static const double enemySpeedRamp = 0.04;
   static const double enemyLaneSpread = 3.8;
 
-  static const double shotToleranceBase = 0.40;
-  static const double shotToleranceNearBonus = 0.018;
+  // Aim visual tuning
+  static const double crosshairDepth = 16.0;
+  static const double crosshairY = 0.58;
 
+  // Colors
   static const Color accent = Color(0xFF92FF8F);
-
   static const Color redwoodDark = Color(0xFF3F1F14);
   static const Color redwoodMid = Color(0xFF6E3922);
   static const Color redwoodGlow = Color(0xFFA55B37);
-
   static const Color forestDark = Color(0xFF102315);
   static const Color forestMid = Color(0xFF1F3B25);
   static const Color mist = Color(0xFFBFD8C6);
@@ -62,6 +68,7 @@ class GameConfig {
 enum GameState {
   menu,
   playing,
+  paused,
   won,
   lost,
 }
@@ -94,8 +101,9 @@ class ShotTrace {
   double life = 0.08;
 }
 
-/// Simple reusable virtual stick state.
-/// Easy to expand later for vertical movement or turning.
+/// ============================================================
+/// SIMPLE VIRTUAL STICK
+/// ============================================================
 class StickState {
   int? pointerId;
   Offset center = Offset.zero;
@@ -145,6 +153,7 @@ class _GamePageState extends State<GamePage>
   double spawnInterval = GameConfig.spawnStart;
   double fireCooldownTimer = 0.0;
 
+  // World / aim state
   double playerX = 0.0;
   double aimX = 0.0;
   double bobTime = 0.0;
@@ -157,6 +166,7 @@ class _GamePageState extends State<GamePage>
 
   bool firePressed = false;
   Rect fireButtonRect = Rect.zero;
+  Rect pauseButtonRect = Rect.zero;
 
   @override
   void initState() {
@@ -202,6 +212,30 @@ class _GamePageState extends State<GamePage>
       bobTime = 0.0;
       enemies.clear();
       traces.clear();
+      leftStick.stop();
+      rightStick.stop();
+      firePressed = false;
+      _lastTick = Duration.zero;
+    });
+  }
+
+  void _togglePause() {
+    setState(() {
+      if (state == GameState.playing) {
+        state = GameState.paused;
+        leftStick.stop();
+        rightStick.stop();
+        firePressed = false;
+      } else if (state == GameState.paused) {
+        state = GameState.playing;
+        _lastTick = Duration.zero;
+      }
+    });
+  }
+
+  void _quitToMenu() {
+    setState(() {
+      state = GameState.menu;
       leftStick.stop();
       rightStick.stop();
       firePressed = false;
@@ -326,9 +360,14 @@ class _GamePageState extends State<GamePage>
 
     fireCooldownTimer = GameConfig.fireCooldown;
 
-    final start = Offset(size.width / 2, size.height * 0.86);
-    final end = Offset(_worldXToScreen(aimX, 16.0, size), size.height * 0.55);
-    traces.add(ShotTrace(start: start, end: end));
+    final crosshair = _crosshairScreenPosition(size);
+
+    traces.add(
+      ShotTrace(
+        start: Offset(size.width / 2, size.height * 0.86),
+        end: crosshair,
+      ),
+    );
 
     Enemy? best;
     double closest = double.infinity;
@@ -354,9 +393,15 @@ class _GamePageState extends State<GamePage>
   }
 
   void _handlePointerDown(PointerDownEvent event, Size size) {
-    if (state != GameState.playing) return;
-
     final p = event.localPosition;
+
+    if (state == GameState.playing && pauseButtonRect.contains(p)) {
+      _togglePause();
+      return;
+    }
+
+    if (state == GameState.paused) return;
+    if (state != GameState.playing) return;
 
     if (fireButtonRect.contains(p)) {
       firePressed = true;
@@ -375,6 +420,8 @@ class _GamePageState extends State<GamePage>
   }
 
   void _handlePointerMove(PointerMoveEvent event) {
+    if (state != GameState.playing) return;
+
     if (event.pointer == leftStick.pointerId) {
       leftStick.update(event.localPosition);
     } else if (event.pointer == rightStick.pointerId) {
@@ -407,6 +454,13 @@ class _GamePageState extends State<GamePage>
     return (235 * perspective).clamp(12.0, 85.0);
   }
 
+  Offset _crosshairScreenPosition(Size size) {
+    return Offset(
+      _worldXToScreen(aimX, GameConfig.crosshairDepth, size),
+      size.height * GameConfig.crosshairY,
+    );
+  }
+
   Rect _calcFireButtonRect(Size size) {
     final double buttonSize = math.min(size.width * 0.16, 92);
     return Rect.fromLTWH(
@@ -417,6 +471,10 @@ class _GamePageState extends State<GamePage>
     );
   }
 
+  Rect _calcPauseButtonRect(Size size) {
+    return Rect.fromLTWH(size.width - 66, 18, 48, 48);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -424,6 +482,7 @@ class _GamePageState extends State<GamePage>
         builder: (context, constraints) {
           final size = Size(constraints.maxWidth, constraints.maxHeight);
           fireButtonRect = _calcFireButtonRect(size);
+          pauseButtonRect = _calcPauseButtonRect(size);
 
           return Listener(
             onPointerDown: (e) => _handlePointerDown(e, size),
@@ -446,10 +505,13 @@ class _GamePageState extends State<GamePage>
                     worldXToScreen: _worldXToScreen,
                     enemyScreenY: _enemyScreenY,
                     enemyRadius: _enemyRadius,
+                    crosshairPosition: _crosshairScreenPosition(size),
                   ),
                 ),
-                if (state == GameState.playing) _buildHud(size),
+                if (state == GameState.playing || state == GameState.paused)
+                  _buildHud(size),
                 if (state == GameState.menu) _buildMenuOverlay(),
+                if (state == GameState.paused) _buildPauseOverlay(),
                 if (state == GameState.won || state == GameState.lost)
                   _buildEndOverlay(),
               ],
@@ -493,6 +555,25 @@ class _GamePageState extends State<GamePage>
                   ],
                 ),
               ],
+            ),
+          ),
+          Positioned(
+            right: 18,
+            top: 18,
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.30),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: GameConfig.accent.withValues(alpha: 0.55),
+                ),
+              ),
+              child: Icon(
+                Icons.pause,
+                color: GameConfig.accent,
+              ),
             ),
           ),
           _buildStickVisual(
@@ -671,7 +752,7 @@ class _GamePageState extends State<GamePage>
               ),
               const SizedBox(height: 18),
               const Text(
-                'Left stick: move\nRight stick: aim\nFire button: shoot',
+                'Left stick: move\nRight stick: aim\nFire button: shoot\nPause button: top right',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 22),
@@ -682,6 +763,61 @@ class _GamePageState extends State<GamePage>
                   child: const Padding(
                     padding: EdgeInsets.symmetric(vertical: 12),
                     child: Text('START GAME'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPauseOverlay() {
+    return Container(
+      color: Colors.black.withValues(alpha: 0.62),
+      child: Center(
+        child: Container(
+          width: 300,
+          padding: const EdgeInsets.all(22),
+          decoration: BoxDecoration(
+            color: const Color(0xFF10161C),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: GameConfig.accent.withValues(alpha: 0.5),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'PAUSED',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: GameConfig.accent,
+                  letterSpacing: 1.4,
+                ),
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _togglePause,
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Text('RESUME'),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _quitToMenu,
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Text('QUIT TO MENU'),
                   ),
                 ),
               ),
@@ -777,6 +913,7 @@ class RedwoodPainter extends CustomPainter {
     required this.worldXToScreen,
     required this.enemyScreenY,
     required this.enemyRadius,
+    required this.crosshairPosition,
   });
 
   final Size size;
@@ -787,6 +924,7 @@ class RedwoodPainter extends CustomPainter {
   final double bobTime;
   final GameState state;
   final bool firePressed;
+  final Offset crosshairPosition;
 
   final double Function(double worldX, double distance, Size size)
       worldXToScreen;
@@ -799,7 +937,7 @@ class RedwoodPainter extends CustomPainter {
     _paintRedwoodHallway(canvas, size);
     _paintEnemies(canvas, size);
     _paintTraces(canvas);
-    _paintCrosshair(canvas, size);
+    _paintCrosshair(canvas);
     _paintWeapon(canvas, size);
   }
 
@@ -1059,25 +1197,31 @@ class RedwoodPainter extends CustomPainter {
     }
   }
 
-  void _paintCrosshair(Canvas canvas, Size size) {
+  void _paintCrosshair(Canvas canvas) {
     if (state == GameState.menu) return;
 
-    final double x = worldXToScreen(aimX - playerX * 0.12, 18.0, size);
-    final double y = size.height * 0.56;
+    final Offset c = crosshairPosition;
 
-    final Paint paint = Paint()
+    final glowPaint = Paint()
+      ..color = GameConfig.accent.withValues(alpha: 0.12)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(c, 24, glowPaint);
+
+    final ringPaint = Paint()
       ..color = GameConfig.accent.withValues(alpha: 0.92)
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke;
 
-    canvas.drawCircle(Offset(x, y), 16, paint);
-    canvas.drawLine(Offset(x - 24, y), Offset(x - 9, y), paint);
-    canvas.drawLine(Offset(x + 9, y), Offset(x + 24, y), paint);
-    canvas.drawLine(Offset(x, y - 24), Offset(x, y - 9), paint);
-    canvas.drawLine(Offset(x, y + 9), Offset(x, y + 24), paint);
+    canvas.drawCircle(c, 14, ringPaint);
+    canvas.drawLine(Offset(c.dx - 22, c.dy), Offset(c.dx - 8, c.dy), ringPaint);
+    canvas.drawLine(Offset(c.dx + 8, c.dy), Offset(c.dx + 22, c.dy), ringPaint);
+    canvas.drawLine(Offset(c.dx, c.dy - 22), Offset(c.dx, c.dy - 8), ringPaint);
+    canvas.drawLine(Offset(c.dx, c.dy + 8), Offset(c.dx, c.dy + 22), ringPaint);
 
-    paint.style = PaintingStyle.fill;
-    canvas.drawCircle(Offset(x, y), 2.2, paint);
+    final centerDot = Paint()
+      ..color = GameConfig.accent.withValues(alpha: 0.98)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(c, 2.4, centerDot);
   }
 
   void _paintWeapon(Canvas canvas, Size size) {
