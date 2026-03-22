@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -23,78 +22,107 @@ class CanopyDefenseApp extends StatelessWidget {
 
 /// ============================================================
 /// HACKABLE CONSTANTS
-/// Change these first when tuning gameplay.
+/// Change values here first to tune game feel.
 /// ============================================================
 class GameConfig {
-  // Core pacing
-  static const double targetFps = 60.0;
-  static const double spawnIntervalStart = 1.6;
-  static const double spawnIntervalMin = 0.45;
-  static const double spawnDifficultyRampPerSecond = 0.015;
-
-  // Player
-  static const double playerMoveSpeed = 2.8; // world units/sec
-  static const double playerAimSpeed = 1.8; // drag sensitivity
-  static const double fireCooldown = 0.22;
   static const int maxHealth = 5;
+  static const int winScore = 35;
 
-  // Enemies
-  static const double enemyStartDistanceMin = 16.0;
+  static const double moveSpeed = 4.2;
+  static const double aimSpeed = 4.8;
+  static const double aimClamp = 4.8;
+  static const double playerClamp = 4.4;
+
+  static const double fireCooldown = 0.24;
+
+  static const double spawnStart = 1.55;
+  static const double spawnMin = 0.42;
+  static const double spawnRampPerSecond = 0.014;
+
+  static const double enemyStartDistanceMin = 14.0;
   static const double enemyStartDistanceMax = 26.0;
-  static const double enemyBaseSpeed = 3.2;
-  static const double enemySpeedRampPerSecond = 0.035;
-  static const double enemyHitRadius = 0.55;
-  static const double enemyLaneSpread = 4.2;
+  static const double enemyBaseSpeed = 2.7;
+  static const double enemySpeedRamp = 0.04;
+  static const double enemyLaneSpread = 3.8;
 
-  // Combat
-  static const double shotAimToleranceBase = 0.32;
-  static const double shotAimToleranceFarBonus = 0.02;
-  static const double shotEffectiveDistance = 30.0;
+  static const double shotToleranceBase = 0.40;
+  static const double shotToleranceNearBonus = 0.018;
 
-  // Presentation
-  static const Color skyTop = Color(0xFF17304D);
-  static const Color skyBottom = Color(0xFF274D6E);
-  static const Color groundTop = Color(0xFF3C5B2B);
-  static const Color groundBottom = Color(0xFF1D2F15);
   static const Color accent = Color(0xFF92FF8F);
 
-  // Win condition
-  static const int winScore = 40;
+  static const Color redwoodDark = Color(0xFF3F1F14);
+  static const Color redwoodMid = Color(0xFF6E3922);
+  static const Color redwoodGlow = Color(0xFFA55B37);
+
+  static const Color forestDark = Color(0xFF102315);
+  static const Color forestMid = Color(0xFF1F3B25);
+  static const Color mist = Color(0xFFBFD8C6);
 }
 
-/// ============================================================
-/// SIMPLE DATA MODELS
-/// ============================================================
+enum GameState {
+  menu,
+  playing,
+  won,
+  lost,
+}
+
 class Enemy {
   Enemy({
     required this.x,
     required this.distance,
     required this.speed,
-    required this.color,
+    required this.tint,
   });
 
-  double x; // horizontal position in world space
-  double distance; // distance from player
+  double x;
+  double distance;
   double speed;
-  Color color;
+  Color tint;
 
-  bool isAlive = true;
-  double hitFlash = 0.0;
+  bool alive = true;
+  double flash = 0.0;
 }
 
 class ShotTrace {
-  ShotTrace({required this.start, required this.end});
+  ShotTrace({
+    required this.start,
+    required this.end,
+  });
 
   Offset start;
   Offset end;
-  double life = 0.10;
+  double life = 0.08;
 }
 
-enum GameState { playing, won, lost }
+/// Simple reusable virtual stick state.
+/// Easy to expand later for vertical movement or turning.
+class StickState {
+  int? pointerId;
+  Offset center = Offset.zero;
+  Offset current = Offset.zero;
+  bool active = false;
 
-/// ============================================================
-/// GAME PAGE
-/// ============================================================
+  void start(int id, Offset position) {
+    pointerId = id;
+    center = position;
+    current = position;
+    active = true;
+  }
+
+  void update(Offset position) {
+    current = position;
+  }
+
+  void stop() {
+    pointerId = null;
+    center = Offset.zero;
+    current = Offset.zero;
+    active = false;
+  }
+
+  Offset get delta => active ? current - center : Offset.zero;
+}
+
 class GamePage extends StatefulWidget {
   const GamePage({super.key});
 
@@ -106,34 +134,29 @@ class _GamePageState extends State<GamePage>
     with SingleTickerProviderStateMixin {
   late final Ticker _ticker;
   Duration _lastTick = Duration.zero;
-
   final math.Random _rng = math.Random();
 
-  // Game state
-  GameState state = GameState.playing;
+  GameState state = GameState.menu;
+
   int score = 0;
   int health = GameConfig.maxHealth;
   double survivalTime = 0.0;
-
-  // Player state
-  double playerX = 0.0;
-  double aimX = 0.0;
+  double spawnTimer = 0.0;
+  double spawnInterval = GameConfig.spawnStart;
   double fireCooldownTimer = 0.0;
 
-  // Touch tracking
-  int? leftPointerId;
-  int? rightPointerId;
-  Offset? leftStart;
-  Offset? rightStart;
-  Offset? leftCurrent;
-  Offset? rightCurrent;
-
-  // Spawn timing
-  double spawnTimer = 0.0;
-  double currentSpawnInterval = GameConfig.spawnIntervalStart;
+  double playerX = 0.0;
+  double aimX = 0.0;
+  double bobTime = 0.0;
 
   final List<Enemy> enemies = [];
   final List<ShotTrace> traces = [];
+
+  final StickState leftStick = StickState();
+  final StickState rightStick = StickState();
+
+  bool firePressed = false;
+  Rect fireButtonRect = Rect.zero;
 
   @override
   void initState() {
@@ -147,29 +170,6 @@ class _GamePageState extends State<GamePage>
     super.dispose();
   }
 
-  void _restart() {
-    setState(() {
-      state = GameState.playing;
-      score = 0;
-      health = GameConfig.maxHealth;
-      survivalTime = 0.0;
-      playerX = 0.0;
-      aimX = 0.0;
-      fireCooldownTimer = 0.0;
-      spawnTimer = 0.0;
-      currentSpawnInterval = GameConfig.spawnIntervalStart;
-      enemies.clear();
-      traces.clear();
-      leftPointerId = null;
-      rightPointerId = null;
-      leftStart = null;
-      rightStart = null;
-      leftCurrent = null;
-      rightCurrent = null;
-      _lastTick = Duration.zero;
-    });
-  }
-
   void _tick(Duration elapsed) {
     if (_lastTick == Duration.zero) {
       _lastTick = elapsed;
@@ -179,20 +179,41 @@ class _GamePageState extends State<GamePage>
     final dt = (elapsed - _lastTick).inMicroseconds / 1000000.0;
     _lastTick = elapsed;
 
-    if (!mounted) return;
-
     if (state == GameState.playing) {
       _updateGame(dt);
     }
 
-    setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _startGame() {
+    setState(() {
+      state = GameState.playing;
+      score = 0;
+      health = GameConfig.maxHealth;
+      survivalTime = 0.0;
+      spawnTimer = 0.0;
+      spawnInterval = GameConfig.spawnStart;
+      fireCooldownTimer = 0.0;
+      playerX = 0.0;
+      aimX = 0.0;
+      bobTime = 0.0;
+      enemies.clear();
+      traces.clear();
+      leftStick.stop();
+      rightStick.stop();
+      firePressed = false;
+      _lastTick = Duration.zero;
+    });
   }
 
   void _updateGame(double dt) {
     survivalTime += dt;
     fireCooldownTimer = math.max(0.0, fireCooldownTimer - dt);
 
-    _updateTouchControls(dt);
+    _updateControls(dt);
     _updateSpawning(dt);
     _updateEnemies(dt);
     _updateTraces(dt);
@@ -204,56 +225,56 @@ class _GamePageState extends State<GamePage>
     }
   }
 
-  void _updateTouchControls(double dt) {
-    // Left side drag = strafe
-    if (leftStart != null && leftCurrent != null) {
-      final dx = (leftCurrent!.dx - leftStart!.dx) / 140.0;
-      playerX += dx * GameConfig.playerMoveSpeed * dt * 8.0;
+  void _updateControls(double dt) {
+    double moveInput = 0.0;
+    double aimInput = 0.0;
+
+    if (leftStick.active) {
+      moveInput = (leftStick.delta.dx / 55.0).clamp(-1.0, 1.0);
     }
 
-    // Right side drag = aim
-    if (rightStart != null && rightCurrent != null) {
-      final dx = (rightCurrent!.dx - rightStart!.dx) / 140.0;
-      aimX += dx * GameConfig.playerAimSpeed * dt * 8.0;
+    if (rightStick.active) {
+      aimInput = (rightStick.delta.dx / 55.0).clamp(-1.0, 1.0);
     }
 
-    // Clamp both
-    playerX = playerX.clamp(-4.5, 4.5);
-    aimX = aimX.clamp(-5.0, 5.0);
+    playerX += moveInput * GameConfig.moveSpeed * dt;
+    aimX += aimInput * GameConfig.aimSpeed * dt;
+
+    playerX = playerX.clamp(-GameConfig.playerClamp, GameConfig.playerClamp);
+    aimX = aimX.clamp(-GameConfig.aimClamp, GameConfig.aimClamp);
+
+    bobTime += dt * (1.0 + moveInput.abs() * 2.0);
   }
 
   void _updateSpawning(double dt) {
-    currentSpawnInterval = math.max(
-      GameConfig.spawnIntervalMin,
-      GameConfig.spawnIntervalStart -
-          survivalTime * GameConfig.spawnDifficultyRampPerSecond,
+    spawnInterval = math.max(
+      GameConfig.spawnMin,
+      GameConfig.spawnStart - survivalTime * GameConfig.spawnRampPerSecond,
     );
 
     spawnTimer += dt;
-    if (spawnTimer >= currentSpawnInterval) {
+    if (spawnTimer >= spawnInterval) {
       spawnTimer = 0.0;
       _spawnEnemy();
     }
   }
 
   void _spawnEnemy() {
-    final distance =
-        _rng.nextDouble() *
+    final distance = _rng.nextDouble() *
             (GameConfig.enemyStartDistanceMax -
                 GameConfig.enemyStartDistanceMin) +
         GameConfig.enemyStartDistanceMin;
 
-    final speed =
-        GameConfig.enemyBaseSpeed +
-        (survivalTime * GameConfig.enemySpeedRampPerSecond) +
+    final speed = GameConfig.enemyBaseSpeed +
+        (survivalTime * GameConfig.enemySpeedRamp) +
         _rng.nextDouble() * 0.7;
 
     final x = (_rng.nextDouble() * 2 - 1) * GameConfig.enemyLaneSpread;
 
-    final colors = [
-      const Color(0xFFD8D8D8),
-      const Color(0xFFC6D0DA),
-      const Color(0xFFE5C87A),
+    final tints = [
+      const Color(0xFFC9D0D6),
+      const Color(0xFFB5BEC7),
+      const Color(0xFFE4D18B),
     ];
 
     enemies.add(
@@ -261,36 +282,35 @@ class _GamePageState extends State<GamePage>
         x: x,
         distance: distance,
         speed: speed,
-        color: colors[_rng.nextInt(colors.length)],
+        tint: tints[_rng.nextInt(tints.length)],
       ),
     );
   }
 
   void _updateEnemies(double dt) {
-    final toRemove = <Enemy>[];
+    final dead = <Enemy>[];
 
     for (final enemy in enemies) {
-      if (!enemy.isAlive) {
-        enemy.hitFlash -= dt * 5.0;
-        if (enemy.hitFlash <= 0.0) {
-          toRemove.add(enemy);
+      if (!enemy.alive) {
+        enemy.flash -= dt * 5.0;
+        if (enemy.flash <= 0.0) {
+          dead.add(enemy);
         }
         continue;
       }
 
       enemy.distance -= enemy.speed * dt;
 
-      // Small tracking drift toward player
-      final driftTarget = playerX * 0.6;
-      enemy.x += (driftTarget - enemy.x) * dt * 0.55;
+      final driftTarget = playerX * 0.65;
+      enemy.x += (driftTarget - enemy.x) * dt * 0.65;
 
-      if (enemy.distance <= 0.6) {
+      if (enemy.distance <= 0.8) {
         health -= 1;
-        toRemove.add(enemy);
+        dead.add(enemy);
       }
     }
 
-    enemies.removeWhere((e) => toRemove.contains(e));
+    enemies.removeWhere(dead.contains);
   }
 
   void _updateTraces(double dt) {
@@ -306,92 +326,95 @@ class _GamePageState extends State<GamePage>
 
     fireCooldownTimer = GameConfig.fireCooldown;
 
-    final start = Offset(size.width / 2, size.height * 0.82);
-    final aimScreenX = _worldXToScreen(
-      aimX,
-      GameConfig.shotEffectiveDistance,
-      size,
-    );
-    final end = Offset(aimScreenX, size.height * 0.42);
-
+    final start = Offset(size.width / 2, size.height * 0.86);
+    final end = Offset(_worldXToScreen(aimX, 16.0, size), size.height * 0.55);
     traces.add(ShotTrace(start: start, end: end));
 
-    Enemy? bestHit;
-    double bestDistance = double.infinity;
+    Enemy? best;
+    double closest = double.infinity;
 
     for (final enemy in enemies) {
-      if (!enemy.isAlive) continue;
+      if (!enemy.alive) continue;
 
-      final tolerance =
-          GameConfig.shotAimToleranceBase +
-          (GameConfig.enemyStartDistanceMax - enemy.distance) *
-              GameConfig.shotAimToleranceFarBonus;
+      final tolerance = GameConfig.shotToleranceBase +
+          ((GameConfig.enemyStartDistanceMax - enemy.distance) *
+              GameConfig.shotToleranceNearBonus);
 
-      final aligned = (enemy.x - aimX).abs() <= tolerance;
-      if (aligned && enemy.distance < bestDistance) {
-        bestDistance = enemy.distance;
-        bestHit = enemy;
+      if ((enemy.x - aimX).abs() <= tolerance && enemy.distance < closest) {
+        closest = enemy.distance;
+        best = enemy;
       }
     }
 
-    if (bestHit != null) {
-      bestHit.isAlive = false;
-      bestHit.hitFlash = 0.18;
+    if (best != null) {
+      best.alive = false;
+      best.flash = 0.18;
       score += 1;
     }
   }
 
+  void _handlePointerDown(PointerDownEvent event, Size size) {
+    if (state != GameState.playing) return;
+
+    final p = event.localPosition;
+
+    if (fireButtonRect.contains(p)) {
+      firePressed = true;
+      _fire(size);
+      return;
+    }
+
+    if (p.dx < size.width * 0.5 && !leftStick.active) {
+      leftStick.start(event.pointer, p);
+      return;
+    }
+
+    if (p.dx >= size.width * 0.5 && !rightStick.active) {
+      rightStick.start(event.pointer, p);
+    }
+  }
+
+  void _handlePointerMove(PointerMoveEvent event) {
+    if (event.pointer == leftStick.pointerId) {
+      leftStick.update(event.localPosition);
+    } else if (event.pointer == rightStick.pointerId) {
+      rightStick.update(event.localPosition);
+    }
+  }
+
+  void _handlePointerUp(PointerEvent event) {
+    if (event.pointer == leftStick.pointerId) {
+      leftStick.stop();
+    } else if (event.pointer == rightStick.pointerId) {
+      rightStick.stop();
+    }
+    firePressed = false;
+  }
+
   double _worldXToScreen(double worldX, double distance, Size size) {
-    final perspective = 1 / math.max(distance, 0.8);
-    final scale = 520 * perspective;
+    final perspective = 1.0 / math.max(distance, 0.8);
+    final scale = 530 * perspective;
     return size.width / 2 + worldX * scale;
   }
 
   double _enemyScreenY(double distance, Size size) {
     final t = (distance / GameConfig.enemyStartDistanceMax).clamp(0.0, 1.0);
-    return lerpDouble(size.height * 0.78, size.height * 0.35, t)!;
+    return _lerp(size.height * 0.84, size.height * 0.40, t);
   }
 
-  double _enemyScreenRadius(double distance, Size size) {
-    final perspective = 1 / math.max(distance, 0.8);
-    return (220 * perspective).clamp(12.0, 80.0);
+  double _enemyRadius(double distance) {
+    final perspective = 1.0 / math.max(distance, 0.8);
+    return (235 * perspective).clamp(12.0, 85.0);
   }
 
-  void _handlePointerDown(PointerDownEvent event, Size size) {
-    final isLeft = event.localPosition.dx < size.width / 2;
-
-    if (isLeft && leftPointerId == null) {
-      leftPointerId = event.pointer;
-      leftStart = event.localPosition;
-      leftCurrent = event.localPosition;
-    } else if (!isLeft && rightPointerId == null) {
-      rightPointerId = event.pointer;
-      rightStart = event.localPosition;
-      rightCurrent = event.localPosition;
-
-      // Tap-to-fire immediately on right side
-      _fire(size);
-    }
-  }
-
-  void _handlePointerMove(PointerMoveEvent event) {
-    if (event.pointer == leftPointerId) {
-      leftCurrent = event.localPosition;
-    } else if (event.pointer == rightPointerId) {
-      rightCurrent = event.localPosition;
-    }
-  }
-
-  void _handlePointerUp(PointerEvent event) {
-    if (event.pointer == leftPointerId) {
-      leftPointerId = null;
-      leftStart = null;
-      leftCurrent = null;
-    } else if (event.pointer == rightPointerId) {
-      rightPointerId = null;
-      rightStart = null;
-      rightCurrent = null;
-    }
+  Rect _calcFireButtonRect(Size size) {
+    final double buttonSize = math.min(size.width * 0.16, 92);
+    return Rect.fromLTWH(
+      size.width - buttonSize - 18,
+      size.height - buttonSize - 90,
+      buttonSize,
+      buttonSize,
+    );
   }
 
   @override
@@ -400,6 +423,7 @@ class _GamePageState extends State<GamePage>
       body: LayoutBuilder(
         builder: (context, constraints) {
           final size = Size(constraints.maxWidth, constraints.maxHeight);
+          fireButtonRect = _calcFireButtonRect(size);
 
           return Listener(
             onPointerDown: (e) => _handlePointerDown(e, size),
@@ -410,23 +434,24 @@ class _GamePageState extends State<GamePage>
               children: [
                 CustomPaint(
                   size: size,
-                  painter: GamePainter(
+                  painter: RedwoodPainter(
                     size: size,
-                    score: score,
-                    health: health,
-                    state: state,
                     enemies: enemies,
                     traces: traces,
-                    aimX: aimX,
                     playerX: playerX,
-                    survivalTime: survivalTime,
+                    aimX: aimX,
+                    bobTime: bobTime,
+                    state: state,
+                    firePressed: firePressed,
                     worldXToScreen: _worldXToScreen,
                     enemyScreenY: _enemyScreenY,
-                    enemyScreenRadius: _enemyScreenRadius,
+                    enemyRadius: _enemyRadius,
                   ),
                 ),
-                _buildHud(size),
-                if (state != GameState.playing) _buildEndOverlay(),
+                if (state == GameState.playing) _buildHud(size),
+                if (state == GameState.menu) _buildMenuOverlay(),
+                if (state == GameState.won || state == GameState.lost)
+                  _buildEndOverlay(),
               ],
             ),
           );
@@ -436,48 +461,152 @@ class _GamePageState extends State<GamePage>
   }
 
   Widget _buildHud(Size size) {
-    return IgnorePointer(
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'CANOPY DEFENSE',
-                style: TextStyle(
-                  color: GameConfig.accent,
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.4,
+    final leftCenter = Offset(85, size.height - 95);
+    final rightCenter = Offset(size.width - 105, size.height - 210);
+
+    return SafeArea(
+      child: Stack(
+        children: [
+          Positioned(
+            left: 14,
+            top: 12,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'CANOPY DEFENSE',
+                  style: TextStyle(
+                    color: GameConfig.accent,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _pill('Score: $score'),
+                    _pill('Health: $health'),
+                    _pill('Time: ${survivalTime.toStringAsFixed(1)}'),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          _buildStickVisual(
+            center: leftStick.active ? leftStick.center : leftCenter,
+            knob: leftStick.active ? leftStick.current : leftCenter,
+            label: 'MOVE',
+            active: leftStick.active,
+          ),
+          _buildStickVisual(
+            center: rightStick.active ? rightStick.center : rightCenter,
+            knob: rightStick.active ? rightStick.current : rightCenter,
+            label: 'AIM',
+            active: rightStick.active,
+          ),
+          Positioned(
+            right: 18,
+            bottom: 90,
+            child: Container(
+              width: fireButtonRect.width,
+              height: fireButtonRect.height,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: firePressed
+                    ? Colors.redAccent.withValues(alpha: 0.45)
+                    : Colors.redAccent.withValues(alpha: 0.20),
+                border: Border.all(
+                  color: Colors.redAccent.withValues(alpha: 0.95),
+                  width: 2.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    blurRadius: 18,
+                    color: Colors.redAccent.withValues(alpha: 0.24),
+                  ),
+                ],
+              ),
+              child: const Center(
+                child: Text(
+                  'FIRE',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.1,
+                  ),
                 ),
               ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  _pill('Score: $score'),
-                  const SizedBox(width: 8),
-                  _pill('Health: $health'),
-                  const SizedBox(width: 8),
-                  _pill('Time: ${survivalTime.toStringAsFixed(1)}'),
-                ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStickVisual({
+    required Offset center,
+    required Offset knob,
+    required String label,
+    required bool active,
+  }) {
+    final Offset clamped = _clampKnob(center, knob, 34);
+
+    return Positioned(
+      left: center.dx - 45,
+      top: center.dy - 45,
+      child: IgnorePointer(
+        child: SizedBox(
+          width: 90,
+          height: 90,
+          child: Stack(
+            children: [
+              Container(
+                width: 90,
+                height: 90,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.black.withValues(alpha: 0.18),
+                  border: Border.all(
+                    color: GameConfig.accent.withValues(
+                      alpha: active ? 0.9 : 0.35,
+                    ),
+                    width: 2,
+                  ),
+                ),
               ),
-              const Spacer(),
-              Row(
-                children: [
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.bottomLeft,
-                      child: _controlHint('LEFT: STRAFE'),
+              Positioned(
+                left: clamped.dx - center.dx + 27,
+                top: clamped.dy - center.dy + 27,
+                child: Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: GameConfig.accent.withValues(
+                      alpha: active ? 0.55 : 0.22,
+                    ),
+                    border: Border.all(
+                      color: GameConfig.accent.withValues(alpha: 0.95),
                     ),
                   ),
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.bottomRight,
-                      child: _controlHint('RIGHT: AIM / TAP FIRE'),
+                ),
+              ),
+              Positioned.fill(
+                child: Center(
+                  child: Transform.translate(
+                    offset: const Offset(0, 58),
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.white.withValues(alpha: 0.82),
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
-                ],
+                ),
               ),
             ],
           ),
@@ -490,53 +619,36 @@ class _GamePageState extends State<GamePage>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha:0.35),
-        border: Border.all(color: GameConfig.accent.withValues(alpha: .5)),
+        color: Colors.black.withValues(alpha: 0.32),
         borderRadius: BorderRadius.circular(18),
-      ),
-      child: Text(
-        text,
-        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-      ),
-    );
-  }
-
-  Widget _controlHint(String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues (alpha:0.30),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: Colors.white.withValues (alpha: .82),
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
+        border: Border.all(
+          color: GameConfig.accent.withValues(alpha: 0.40),
         ),
       ),
+      child: Text(
+        text,
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      ),
     );
   }
 
-  Widget _buildEndOverlay() {
-    final won = state == GameState.won;
-
+  Widget _buildMenuOverlay() {
     return Container(
-      color: Colors.black.withValues (alpha: 0.62),
+      color: Colors.black.withValues(alpha: 0.72),
       child: Center(
         child: Container(
-          width: 320,
-          padding: const EdgeInsets.all(22),
+          width: 340,
+          padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: const Color(0xFF10161C),
+            color: const Color(0xFF11161B),
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: GameConfig.accent.withValues(alpha: 0.5)),
-            boxShadow: const [
+            border: Border.all(
+              color: GameConfig.accent.withValues(alpha: 0.48),
+            ),
+            boxShadow: [
               BoxShadow(
                 blurRadius: 18,
-                color: Colors.black54,
-                offset: Offset(0, 8),
+                color: Colors.black.withValues(alpha: 0.45),
               ),
             ],
           ),
@@ -544,43 +656,32 @@ class _GamePageState extends State<GamePage>
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                won ? 'VICTORY' : 'DEFEAT',
+                'CANOPY DEFENSE',
                 style: TextStyle(
-                  fontSize: 28,
+                  color: GameConfig.accent,
+                  fontSize: 30,
                   fontWeight: FontWeight.bold,
-                  color: won ? GameConfig.accent : Colors.redAccent,
                   letterSpacing: 1.5,
                 ),
               ),
               const SizedBox(height: 14),
-              Text(
-                won
-                    ? 'You held the forest line.'
-                    : 'The invaders broke through.',
+              const Text(
+                'A retro forest corridor shooter.\nDefend the redwood passage from invading machines.',
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 16),
               ),
-              const SizedBox(height: 12),
-              Text(
-                'Final Score: $score',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                ),
+              const SizedBox(height: 18),
+              const Text(
+                'Left stick: move\nRight stick: aim\nFire button: shoot',
+                textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 6),
-              Text(
-                'Survival Time: ${survivalTime.toStringAsFixed(1)}s',
-                style: const TextStyle(fontSize: 15),
-              ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 22),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _restart,
+                  onPressed: _startGame,
                   child: const Padding(
                     padding: EdgeInsets.symmetric(vertical: 12),
-                    child: Text('RESTART'),
+                    child: Text('START GAME'),
                   ),
                 ),
               ),
@@ -590,275 +691,481 @@ class _GamePageState extends State<GamePage>
       ),
     );
   }
+
+  Widget _buildEndOverlay() {
+    final bool won = state == GameState.won;
+
+    return Container(
+      color: Colors.black.withValues(alpha: 0.68),
+      child: Center(
+        child: Container(
+          width: 320,
+          padding: const EdgeInsets.all(22),
+          decoration: BoxDecoration(
+            color: const Color(0xFF10161C),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: GameConfig.accent.withValues(alpha: 0.5),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                won ? 'PASSAGE SECURED' : 'FOREST BREACHED',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  color: won ? GameConfig.accent : Colors.redAccent,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                won
+                    ? 'You held the redwood corridor.'
+                    : 'Too many invaders broke through.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Final Score: $score',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text('Survival Time: ${survivalTime.toStringAsFixed(1)}s'),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _startGame,
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Text('PLAY AGAIN'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Offset _clampKnob(Offset center, Offset current, double maxRadius) {
+    final delta = current - center;
+    final distance = delta.distance;
+    if (distance <= maxRadius || distance == 0) return current;
+    return center + (delta / distance) * maxRadius;
+  }
 }
 
-/// ============================================================
-/// PAINTER
-/// ============================================================
-class GamePainter extends CustomPainter {
-  GamePainter({
+class RedwoodPainter extends CustomPainter {
+  RedwoodPainter({
     required this.size,
-    required this.score,
-    required this.health,
-    required this.state,
     required this.enemies,
     required this.traces,
-    required this.aimX,
     required this.playerX,
-    required this.survivalTime,
+    required this.aimX,
+    required this.bobTime,
+    required this.state,
+    required this.firePressed,
     required this.worldXToScreen,
     required this.enemyScreenY,
-    required this.enemyScreenRadius,
+    required this.enemyRadius,
   });
 
   final Size size;
-  final int score;
-  final int health;
-  final GameState state;
   final List<Enemy> enemies;
   final List<ShotTrace> traces;
-  final double aimX;
   final double playerX;
-  final double survivalTime;
+  final double aimX;
+  final double bobTime;
+  final GameState state;
+  final bool firePressed;
 
-  final double Function(double, double, Size) worldXToScreen;
-  final double Function(double, Size) enemyScreenY;
-  final double Function(double, Size) enemyScreenRadius;
+  final double Function(double worldX, double distance, Size size)
+      worldXToScreen;
+  final double Function(double distance, Size size) enemyScreenY;
+  final double Function(double distance) enemyRadius;
 
   @override
   void paint(Canvas canvas, Size size) {
     _paintBackground(canvas, size);
-    _paintDepthLines(canvas, size);
+    _paintRedwoodHallway(canvas, size);
     _paintEnemies(canvas, size);
-    _paintWeaponOverlay(canvas, size);
-    _paintTraces(canvas, size);
+    _paintTraces(canvas);
     _paintCrosshair(canvas, size);
+    _paintWeapon(canvas, size);
   }
 
   void _paintBackground(Canvas canvas, Size size) {
-    final skyRect = Rect.fromLTWH(0, 0, size.width, size.height * 0.52);
-    final groundRect = Rect.fromLTWH(
-      0,
-      size.height * 0.52,
-      size.width,
-      size.height * 0.48,
-    );
-
-    final skyPaint = Paint()
+    final Rect sky = Rect.fromLTWH(0, 0, size.width, size.height * 0.58);
+    final Paint skyPaint = Paint()
       ..shader = const LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [GameConfig.skyTop, GameConfig.skyBottom],
-      ).createShader(skyRect);
+        colors: [
+          Color(0xFF243229),
+          Color(0xFF4E6A54),
+          Color(0xFF9FB59D),
+        ],
+      ).createShader(sky);
 
-    final groundPaint = Paint()
-      ..shader = const LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [GameConfig.groundTop, GameConfig.groundBottom],
-      ).createShader(groundRect);
+    canvas.drawRect(sky, skyPaint);
 
-    canvas.drawRect(skyRect, skyPaint);
-    canvas.drawRect(groundRect, groundPaint);
-
-    final horizonPaint = Paint()
-      ..color = GameConfig.accent.withValues(alpha: 0.15)
-      ..strokeWidth = 2;
-    canvas.drawLine(
-      Offset(0, size.height * 0.52),
-      Offset(size.width, size.height * 0.52),
-      horizonPaint,
+    final Paint mistPaint = Paint()
+      ..color = GameConfig.mist.withValues(alpha: 0.13);
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(size.width / 2, size.height * 0.47),
+        width: size.width * 0.95,
+        height: size.height * 0.25,
+      ),
+      mistPaint,
     );
-
-    // Stylized trees
-    for (int i = 0; i < 12; i++) {
-      final x = i * (size.width / 11);
-      final h = 60 + (i % 4) * 20.0;
-      final trunkPaint = Paint()..color = const Color(0xFF2B1B11);
-      final canopyPaint = Paint()..color = const Color(0xFF173A1B);
-
-      canvas.drawRect(
-        Rect.fromCenter(
-          center: Offset(x, size.height * 0.49),
-          width: 10,
-          height: h,
-        ),
-        trunkPaint,
-      );
-      canvas.drawCircle(
-        Offset(x, size.height * 0.44 - (i % 3) * 8),
-        24 + (i % 3) * 6,
-        canopyPaint,
-      );
-    }
   }
 
-  void _paintDepthLines(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.06)
-      ..strokeWidth = 1;
+  void _paintRedwoodHallway(Canvas canvas, Size size) {
+    final double horizonY = size.height * 0.40;
+    final double corridorBottom = size.height;
+    final double corridorHalfTop = size.width * 0.10;
+    final double corridorHalfBottom = size.width * 0.43;
+    final double shift = -playerX * 22;
 
-    final centerX = size.width / 2 - playerX * 12;
-    final horizonY = size.height * 0.52;
+    final Path leftForest = Path()
+      ..moveTo(0, corridorBottom)
+      ..lineTo(size.width / 2 - corridorHalfBottom + shift, corridorBottom)
+      ..lineTo(size.width / 2 - corridorHalfTop + shift, horizonY)
+      ..lineTo(0, horizonY * 0.88)
+      ..close();
 
-    for (int i = -5; i <= 5; i++) {
-      final startX = centerX + i * 42;
-      canvas.drawLine(
-        Offset(centerX, horizonY),
-        Offset(startX * 1.8, size.height),
-        paint,
+    final Path rightForest = Path()
+      ..moveTo(size.width, corridorBottom)
+      ..lineTo(size.width / 2 + corridorHalfBottom + shift, corridorBottom)
+      ..lineTo(size.width / 2 + corridorHalfTop + shift, horizonY)
+      ..lineTo(size.width, horizonY * 0.88)
+      ..close();
+
+    final Paint forestPaint = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          GameConfig.forestMid,
+          GameConfig.forestDark,
+        ],
+      ).createShader(
+        Rect.fromLTWH(0, horizonY, size.width, size.height - horizonY),
       );
+
+    canvas.drawPath(leftForest, forestPaint);
+    canvas.drawPath(rightForest, forestPaint);
+
+    final Path trail = Path()
+      ..moveTo(size.width / 2 - corridorHalfBottom + shift, corridorBottom)
+      ..lineTo(size.width / 2 + corridorHalfBottom + shift, corridorBottom)
+      ..lineTo(size.width / 2 + corridorHalfTop + shift, horizonY)
+      ..lineTo(size.width / 2 - corridorHalfTop + shift, horizonY)
+      ..close();
+
+    final Paint trailPaint = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Color(0xFF6F4B2F),
+          Color(0xFF4B2E1D),
+          Color(0xFF2F1D13),
+        ],
+      ).createShader(
+        Rect.fromLTWH(0, horizonY, size.width, size.height - horizonY),
+      );
+
+    canvas.drawPath(trail, trailPaint);
+
+    final Paint linePaint = Paint()
+      ..color = Colors.black.withValues(alpha: 0.22)
+      ..strokeWidth = 1.4;
+
+    for (int i = 1; i <= 9; i++) {
+      final double t = i / 10;
+      final double y = _lerp(horizonY, corridorBottom, t * t);
+      final double halfW = _lerp(corridorHalfTop, corridorHalfBottom, t);
+      canvas.drawLine(
+        Offset(size.width / 2 - halfW + shift, y),
+        Offset(size.width / 2 + halfW + shift, y),
+        linePaint,
+      );
+    }
+
+    final Paint edgeGlow = Paint()
+      ..color = GameConfig.redwoodGlow.withValues(alpha: 0.20)
+      ..strokeWidth = 3.0;
+
+    canvas.drawLine(
+      Offset(size.width / 2 - corridorHalfTop + shift, horizonY),
+      Offset(size.width / 2 - corridorHalfBottom + shift, corridorBottom),
+      edgeGlow,
+    );
+    canvas.drawLine(
+      Offset(size.width / 2 + corridorHalfTop + shift, horizonY),
+      Offset(size.width / 2 + corridorHalfBottom + shift, corridorBottom),
+      edgeGlow,
+    );
+
+    _paintRedwoodColumns(canvas, size, true, horizonY, corridorBottom, shift);
+    _paintRedwoodColumns(canvas, size, false, horizonY, corridorBottom, shift);
+  }
+
+  void _paintRedwoodColumns(
+    Canvas canvas,
+    Size size,
+    bool left,
+    double horizonY,
+    double bottomY,
+    double shift,
+  ) {
+    final Paint bark = Paint()..color = GameConfig.redwoodMid;
+    final Paint barkDark = Paint()..color = GameConfig.redwoodDark;
+    final Paint moss = Paint()
+      ..color = const Color(0xFF28452B).withValues(alpha: 0.45);
+
+    for (int i = 0; i < 7; i++) {
+      final double t = (i + 1) / 8;
+      final double y = _lerp(horizonY + 10, bottomY + 30, t * t);
+      final double trunkHeight = _lerp(24, 260, t);
+      final double trunkWidth = _lerp(5, 68, t);
+
+      final double edgeX = left
+          ? _lerp(size.width * 0.40 + shift, 12 + shift, t)
+          : _lerp(size.width * 0.60 + shift, size.width - 12 + shift, t);
+
+      final Rect trunkRect = Rect.fromCenter(
+        center: Offset(edgeX, y - trunkHeight * 0.45),
+        width: trunkWidth,
+        height: trunkHeight,
+      );
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(trunkRect, Radius.circular(trunkWidth * 0.18)),
+        bark,
+      );
+
+      canvas.drawRect(
+        Rect.fromLTWH(
+          trunkRect.left + trunkWidth * 0.18,
+          trunkRect.top,
+          trunkWidth * 0.12,
+          trunkHeight,
+        ),
+        barkDark,
+      );
+      canvas.drawRect(
+        Rect.fromLTWH(
+          trunkRect.left + trunkWidth * 0.58,
+          trunkRect.top,
+          trunkWidth * 0.10,
+          trunkHeight,
+        ),
+        barkDark,
+      );
+
+      if (i % 2 == 0) {
+        canvas.drawOval(
+          Rect.fromCenter(
+            center: Offset(edgeX, trunkRect.top + trunkHeight * 0.28),
+            width: trunkWidth * 0.92,
+            height: trunkHeight * 0.15,
+          ),
+          moss,
+        );
+      }
     }
   }
 
   void _paintEnemies(Canvas canvas, Size size) {
-    final sorted = [...enemies]
-      ..sort((a, b) => b.distance.compareTo(a.distance));
+    final sorted = [...enemies]..sort((a, b) => b.distance.compareTo(a.distance));
 
     for (final enemy in sorted) {
-      final x = worldXToScreen(enemy.x - playerX, enemy.distance, size);
-      final y = enemyScreenY(enemy.distance, size);
-      final r = enemyScreenRadius(enemy.distance, size);
+      final double x = worldXToScreen(enemy.x - playerX, enemy.distance, size);
+      final double y = enemyScreenY(enemy.distance, size);
+      final double r = enemyRadius(enemy.distance);
 
-      final bodyPaint = Paint()
-        ..color = enemy.isAlive
-            ? enemy.color
-            : Colors.white.withValues(alpha: enemy.hitFlash.clamp(0.0, 1.0));
+      final Paint bodyPaint = Paint()
+        ..color = enemy.alive
+            ? enemy.tint
+            : Colors.white.withValues(alpha: enemy.flash.clamp(0.0, 1.0));
 
-      final eyePaint = Paint()..color = Colors.redAccent;
-      final limbPaint = Paint()
-        ..color = const Color(0xFF7D868E)
-        ..strokeWidth = math.max(2, r * 0.12)
+      final Paint eyePaint = Paint()..color = Colors.redAccent;
+      final Paint limbPaint = Paint()
+        ..color = const Color(0xFF87929C)
+        ..strokeWidth = math.max(2.0, r * 0.12)
         ..strokeCap = StrokeCap.round;
 
-      // legs
       canvas.drawLine(
-        Offset(x - r * 0.25, y + r * 0.75),
-        Offset(x - r * 0.45, y + r * 1.35),
+        Offset(x - r * 0.28, y + r * 0.72),
+        Offset(x - r * 0.48, y + r * 1.32),
         limbPaint,
       );
       canvas.drawLine(
-        Offset(x + r * 0.25, y + r * 0.75),
-        Offset(x + r * 0.45, y + r * 1.35),
+        Offset(x + r * 0.28, y + r * 0.72),
+        Offset(x + r * 0.48, y + r * 1.32),
         limbPaint,
       );
 
-      // body
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromCenter(
             center: Offset(x, y),
-            width: r * 1.1,
-            height: r * 1.5,
+            width: r * 1.05,
+            height: r * 1.50,
           ),
-          Radius.circular(r * 0.18),
+          Radius.circular(r * 0.16),
         ),
         bodyPaint,
       );
 
-      // arms
       canvas.drawLine(
-        Offset(x - r * 0.5, y - r * 0.05),
-        Offset(x - r * 1.0, y + r * 0.3),
+        Offset(x - r * 0.45, y - r * 0.05),
+        Offset(x - r * 0.98, y + r * 0.25),
         limbPaint,
       );
       canvas.drawLine(
-        Offset(x + r * 0.5, y - r * 0.05),
-        Offset(x + r * 1.0, y + r * 0.3),
+        Offset(x + r * 0.45, y - r * 0.05),
+        Offset(x + r * 0.98, y + r * 0.25),
         limbPaint,
       );
 
-      // head
-      canvas.drawCircle(Offset(x, y - r * 0.95), r * 0.42, bodyPaint);
-      canvas.drawCircle(Offset(x - r * 0.12, y - r * 0.98), r * 0.05, eyePaint);
-      canvas.drawCircle(Offset(x + r * 0.12, y - r * 0.98), r * 0.05, eyePaint);
+      canvas.drawCircle(Offset(x, y - r * 0.92), r * 0.40, bodyPaint);
+      canvas.drawCircle(Offset(x - r * 0.10, y - r * 0.95), r * 0.05, eyePaint);
+      canvas.drawCircle(Offset(x + r * 0.10, y - r * 0.95), r * 0.05, eyePaint);
     }
   }
 
-  void _paintWeaponOverlay(Canvas canvas, Size size) {
-    final basePaint = Paint()..color = const Color(0xFF4B2F1B);
-    final accentPaint = Paint()..color = GameConfig.accent.withValues(alpha: 0.35);
-
-    final center = Offset(size.width / 2, size.height * 0.90);
-
-    final weaponPath = Path()
-      ..moveTo(center.dx - 90, center.dy)
-      ..quadraticBezierTo(
-        center.dx - 65,
-        center.dy - 20,
-        center.dx - 20,
-        center.dy - 16,
-      )
-      ..lineTo(center.dx + 20, center.dy - 16)
-      ..quadraticBezierTo(
-        center.dx + 65,
-        center.dy - 20,
-        center.dx + 90,
-        center.dy,
-      )
-      ..lineTo(center.dx + 50, center.dy + 24)
-      ..lineTo(center.dx - 50, center.dy + 24)
-      ..close();
-
-    canvas.drawPath(weaponPath, basePaint);
-
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromCenter(
-          center: Offset(center.dx, center.dy - 18),
-          width: 26,
-          height: 36,
-        ),
-        const Radius.circular(8),
-      ),
-      accentPaint,
-    );
-  }
-
-  void _paintTraces(Canvas canvas, Size size) {
+  void _paintTraces(Canvas canvas) {
     for (final trace in traces) {
-      final p = Paint()
-        ..color = GameConfig.accent.withValues( alpha: 
-          (trace.life / 0.10).clamp(0.0, 1.0),
+      final Paint p = Paint()
+        ..color = GameConfig.accent.withValues(
+          alpha: (trace.life / 0.08).clamp(0.0, 1.0),
         )
         ..strokeWidth = 3
         ..strokeCap = StrokeCap.round;
-
       canvas.drawLine(trace.start, trace.end, p);
     }
   }
 
   void _paintCrosshair(Canvas canvas, Size size) {
-    final x = worldXToScreen(aimX - playerX * 0.15, 18, size);
-    final y = size.height * 0.56;
+    if (state == GameState.menu) return;
 
-    final paint = Paint()
+    final double x = worldXToScreen(aimX - playerX * 0.12, 18.0, size);
+    final double y = size.height * 0.56;
+
+    final Paint paint = Paint()
       ..color = GameConfig.accent.withValues(alpha: 0.92)
-      ..strokeWidth = 2;
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
 
-    canvas.drawCircle(Offset(x, y), 16, paint..style = PaintingStyle.stroke);
+    canvas.drawCircle(Offset(x, y), 16, paint);
+    canvas.drawLine(Offset(x - 24, y), Offset(x - 9, y), paint);
+    canvas.drawLine(Offset(x + 9, y), Offset(x + 24, y), paint);
+    canvas.drawLine(Offset(x, y - 24), Offset(x, y - 9), paint);
+    canvas.drawLine(Offset(x, y + 9), Offset(x, y + 24), paint);
+
     paint.style = PaintingStyle.fill;
-    canvas.drawRect(
-      Rect.fromCenter(center: Offset(x, y), width: 3, height: 3),
-      paint,
+    canvas.drawCircle(Offset(x, y), 2.2, paint);
+  }
+
+  void _paintWeapon(Canvas canvas, Size size) {
+    final double bobX = math.sin(bobTime * 3.2) * 4;
+    final double bobY = math.sin(bobTime * 6.4) * 3;
+    final double centerX = size.width / 2 + bobX;
+    final double baseY = size.height * 0.88 + bobY + (firePressed ? 4 : 0);
+
+    final Paint wood = Paint()..color = const Color(0xFF5C3A24);
+    final Paint darkWood = Paint()..color = const Color(0xFF3D2417);
+    final Paint metal = Paint()..color = const Color(0xFFC2CCD2);
+    final Paint stringPaint = Paint()
+      ..color = const Color(0xFFE9DFC7)
+      ..strokeWidth = 2.2;
+    final Paint glow = Paint()
+      ..color = GameConfig.accent.withValues(alpha: firePressed ? 0.55 : 0.18);
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(
+          center: Offset(centerX, baseY),
+          width: 52,
+          height: 125,
+        ),
+        const Radius.circular(10),
+      ),
+      wood,
     );
 
-    canvas.drawLine(Offset(x - 24, y), Offset(x - 10, y), paint);
-    canvas.drawLine(Offset(x + 10, y), Offset(x + 24, y), paint);
-    canvas.drawLine(Offset(x, y - 24), Offset(x, y - 10), paint);
-    canvas.drawLine(Offset(x, y + 10), Offset(x, y + 24), paint);
+    canvas.drawRect(
+      Rect.fromCenter(
+        center: Offset(centerX - 10, baseY),
+        width: 10,
+        height: 125,
+      ),
+      darkWood,
+    );
+
+    canvas.drawLine(
+      Offset(centerX - 88, baseY - 34),
+      Offset(centerX + 88, baseY - 34),
+      metal..strokeWidth = 8,
+    );
+
+    metal.strokeWidth = 5;
+    canvas.drawLine(
+      Offset(centerX - 88, baseY - 34),
+      Offset(centerX - 112, baseY - 72),
+      metal,
+    );
+    canvas.drawLine(
+      Offset(centerX + 88, baseY - 34),
+      Offset(centerX + 112, baseY - 72),
+      metal,
+    );
+
+    canvas.drawLine(
+      Offset(centerX - 112, baseY - 72),
+      Offset(centerX, baseY - 9),
+      stringPaint,
+    );
+    canvas.drawLine(
+      Offset(centerX + 112, baseY - 72),
+      Offset(centerX, baseY - 9),
+      stringPaint,
+    );
+
+    canvas.drawRect(
+      Rect.fromCenter(
+        center: Offset(centerX, baseY - 25),
+        width: 12,
+        height: 78,
+      ),
+      Paint()..color = const Color(0xFFBBC7CD),
+    );
+
+    canvas.drawRect(
+      Rect.fromCenter(
+        center: Offset(centerX, baseY - 55),
+        width: 6,
+        height: 32,
+      ),
+      glow,
+    );
   }
 
   @override
-  bool shouldRepaint(covariant GamePainter oldDelegate) => true;
+  bool shouldRepaint(covariant RedwoodPainter oldDelegate) => true;
 }
 
-/// ============================================================
-/// SMALL HELPER
-/// ============================================================
-double? lerpDouble(num? a, num? b, double t) {
-  if (a == null && b == null) return null;
-  a ??= 0.0;
-  b ??= 0.0;
-  return a + (b - a) * t;
-}
+double _lerp(double a, double b, double t) => a + (b - a) * t;
