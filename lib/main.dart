@@ -24,36 +24,30 @@ class CanopyDefenseApp extends StatelessWidget {
 /// HACKABLE CONSTANTS
 /// ============================================================
 class GameConfig {
-  // Rules
   static const int maxHealth = 5;
-  static const int finalWave = 5;
+  static const int finalWave = 10;
 
-  // Controls
   static const double moveSpeed = 4.2;
   static const double aimSpeed = 4.8;
   static const double playerClamp = 4.4;
   static const double aimClamp = 3.8;
 
-  // Combat
   static const double fireCooldown = 0.22;
   static const double crosshairY = 0.66;
   static const double hitPadding = 16.0;
   static const double emergencyHitDistance = 2.6;
   static const double emergencyHitPadding = 42.0;
 
-  // Enemy pacing
   static const double enemyStartDistanceMin = 14.0;
   static const double enemyStartDistanceMax = 25.0;
-  static const double enemyBaseSpeed = 2.5;
-  static const double enemySpeedRamp = 0.04;
+  static const double enemyBaseSpeed = 2.4;
+  static const double enemySpeedRamp = 0.055;
   static const double enemyLaneSpread = 4.0;
 
-  // Wave pacing
-  static const double timeBetweenWaves = 2.6;
-  static const double waveSpawnDelay = 0.85;
-  static const double bossSpawnDelay = 1.4;
+  static const double timeBetweenWaves = 2.4;
+  static const double waveSpawnDelay = 0.78;
+  static const double bossSpawnDelay = 1.2;
 
-  // Visuals
   static const Color accent = Color(0xFF92FF8F);
   static const Color redwoodDark = Color(0xFF3F1F14);
   static const Color redwoodMid = Color(0xFF6E3922);
@@ -357,7 +351,7 @@ class _GamePageState extends State<GamePage>
       }
     }
 
-    final bool waveFullySpawned =
+    final waveFullySpawned =
         activeWave != null && waveSpawnIndex >= activeWave!.spawnQueue.length;
 
     if (waveFullySpawned && enemies.isEmpty) {
@@ -391,12 +385,24 @@ class _GamePageState extends State<GamePage>
   }
 
   WavePlan _buildWave(int waveNumber) {
+    final isBossWave = waveNumber == 3 ||
+        waveNumber == 6 ||
+        waveNumber == 9 ||
+        waveNumber == 10;
+
     switch (waveNumber) {
       case 1:
         return WavePlan(
           number: 1,
           isBossWave: false,
-          spawnQueue: List.generate(6, (_) => EnemyType.standard),
+          spawnQueue: [
+            EnemyType.standard,
+            EnemyType.standard,
+            EnemyType.standard,
+            EnemyType.standard,
+            EnemyType.standard,
+            EnemyType.standard,
+          ],
         );
       case 2:
         return WavePlan(
@@ -410,6 +416,7 @@ class _GamePageState extends State<GamePage>
             EnemyType.standard,
             EnemyType.heavy,
             EnemyType.standard,
+            EnemyType.scout,
           ],
         );
       case 3:
@@ -435,18 +442,96 @@ class _GamePageState extends State<GamePage>
             EnemyType.scout,
             EnemyType.heavy,
             EnemyType.standard,
+            EnemyType.scout,
           ],
         );
       case 5:
-      default:
         return WavePlan(
           number: 5,
+          isBossWave: false,
+          spawnQueue: [
+            EnemyType.heavy,
+            EnemyType.standard,
+            EnemyType.scout,
+            EnemyType.heavy,
+            EnemyType.standard,
+            EnemyType.scout,
+            EnemyType.standard,
+            EnemyType.heavy,
+            EnemyType.scout,
+            EnemyType.standard,
+          ],
+        );
+      case 6:
+        return WavePlan(
+          number: 6,
           isBossWave: true,
           spawnQueue: [
             EnemyType.heavy,
             EnemyType.standard,
             EnemyType.boss,
             EnemyType.scout,
+          ],
+        );
+      case 7:
+        return WavePlan(
+          number: 7,
+          isBossWave: false,
+          spawnQueue: [
+            EnemyType.scout,
+            EnemyType.scout,
+            EnemyType.heavy,
+            EnemyType.standard,
+            EnemyType.heavy,
+            EnemyType.standard,
+            EnemyType.scout,
+            EnemyType.heavy,
+            EnemyType.standard,
+            EnemyType.scout,
+            EnemyType.heavy,
+          ],
+        );
+      case 8:
+        return WavePlan(
+          number: 8,
+          isBossWave: false,
+          spawnQueue: [
+            EnemyType.heavy,
+            EnemyType.scout,
+            EnemyType.heavy,
+            EnemyType.standard,
+            EnemyType.scout,
+            EnemyType.heavy,
+            EnemyType.standard,
+            EnemyType.heavy,
+            EnemyType.scout,
+            EnemyType.standard,
+            EnemyType.heavy,
+            EnemyType.scout,
+          ],
+        );
+      case 9:
+        return WavePlan(
+          number: 9,
+          isBossWave: true,
+          spawnQueue: [
+            EnemyType.heavy,
+            EnemyType.boss,
+            EnemyType.scout,
+            EnemyType.heavy,
+          ],
+        );
+      case 10:
+      default:
+        return WavePlan(
+          number: 10,
+          isBossWave: true,
+          spawnQueue: [
+            EnemyType.heavy,
+            EnemyType.standard,
+            EnemyType.boss,
+            EnemyType.scout,
+            EnemyType.heavy,
             EnemyType.boss,
           ],
         );
@@ -469,25 +554,25 @@ class _GamePageState extends State<GamePage>
 
     switch (type) {
       case EnemyType.scout:
-        speed = GameConfig.enemyBaseSpeed + 1.1 + currentWave * 0.08;
+        speed = GameConfig.enemyBaseSpeed + 1.1 + currentWave * 0.10;
         tint = const Color(0xFFD8E0EA);
         radiusScale = 0.82;
         hp = 1;
-        weave = 1.4;
+        weave = 1.5 + currentWave * 0.03;
         break;
       case EnemyType.heavy:
-        speed = GameConfig.enemyBaseSpeed - 0.2 + currentWave * 0.05;
+        speed = GameConfig.enemyBaseSpeed + 0.10 + currentWave * 0.08;
         tint = const Color(0xFFE1C77A);
         radiusScale = 1.18;
-        hp = 2;
+        hp = 2 + (currentWave >= 8 ? 1 : 0);
         weave = 0.2;
         break;
       case EnemyType.boss:
-        speed = GameConfig.enemyBaseSpeed - 0.45 + currentWave * 0.04;
+        speed = GameConfig.enemyBaseSpeed + currentWave * 0.06;
         tint = const Color(0xFFFFC36E);
-        radiusScale = 1.75;
-        hp = 5;
-        weave = 0.1;
+        radiusScale = currentWave >= 10 ? 2.0 : 1.75;
+        hp = currentWave >= 10 ? 8 : currentWave >= 6 ? 6 : 5;
+        weave = 0.12;
         x *= 0.45;
         break;
       case EnemyType.standard:
@@ -496,8 +581,8 @@ class _GamePageState extends State<GamePage>
             _rng.nextDouble() * 0.45;
         tint = const Color(0xFFC9D0D6);
         radiusScale = 1.0;
-        hp = 1;
-        weave = 0.45;
+        hp = currentWave >= 7 ? 2 : 1;
+        weave = 0.45 + currentWave * 0.01;
         break;
     }
 
@@ -610,9 +695,9 @@ class _GamePageState extends State<GamePage>
       if (bestTarget.health <= 0) {
         bestTarget.alive = false;
         score += bestTarget.type == EnemyType.boss
-            ? 10
+            ? 12
             : bestTarget.type == EnemyType.heavy
-                ? 3
+                ? 4
                 : bestTarget.type == EnemyType.scout
                     ? 2
                     : 1;
@@ -698,17 +783,22 @@ class _GamePageState extends State<GamePage>
   }
 
   Rect _calcFireButtonRect(Size size) {
-    final buttonSize = math.min(size.width * 0.16, 92.0);
+    final double buttonSize = math.min(size.width * 0.16, 92.0);
     return Rect.fromLTWH(
-      size.width - buttonSize - 18,
-      size.height - buttonSize - 90,
+      size.width - buttonSize - 18.0,
+      size.height - buttonSize - 90.0,
       buttonSize,
       buttonSize,
     );
   }
 
   Rect _calcPauseButtonRect(Size size) {
-    return Rect.fromLTWH(size.width - 66, 18, 48, 48);
+    return Rect.fromLTWH(
+      size.width - 66.0,
+      18.0,
+      48.0,
+      48.0,
+    );
   }
 
   @override
@@ -736,8 +826,8 @@ class _GamePageState extends State<GamePage>
                     playerX: playerX,
                     bobTime: bobTime,
                     state: state,
-                    firePressed: firePressed,
                     currentWave: currentWave,
+                    firePressed: firePressed,
                     worldXToScreen: _worldXToScreen,
                     enemyScreenY: _enemyScreenY,
                     enemyRadius: _enemyRadius,
@@ -809,7 +899,10 @@ class _GamePageState extends State<GamePage>
                   color: GameConfig.accent.withValues(alpha: 0.55),
                 ),
               ),
-              child: Icon(Icons.pause, color: GameConfig.accent),
+              child: Icon(
+                Icons.pause,
+                color: GameConfig.accent,
+              ),
             ),
           ),
           _buildStickVisual(
@@ -1001,7 +1094,7 @@ class _GamePageState extends State<GamePage>
               ),
               const SizedBox(height: 14),
               const Text(
-                'Retro forest corridor shooter.\nNow with waves, bosses, move + aim sticks.',
+                'Retro forest corridor shooter.\nNow with 10 waves and bosses.',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 18),
@@ -1162,8 +1255,8 @@ class RedwoodPainter extends CustomPainter {
     required this.playerX,
     required this.bobTime,
     required this.state,
-    required this.firePressed,
     required this.currentWave,
+    required this.firePressed,
     required this.worldXToScreen,
     required this.enemyScreenY,
     required this.enemyRadius,
@@ -1176,8 +1269,8 @@ class RedwoodPainter extends CustomPainter {
   final double playerX;
   final double bobTime;
   final GameState state;
-  final bool firePressed;
   final int currentWave;
+  final bool firePressed;
   final Offset crosshairPosition;
 
   final double Function(double worldX, double distance, Size size)
