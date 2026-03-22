@@ -22,45 +22,38 @@ class CanopyDefenseApp extends StatelessWidget {
 
 /// ============================================================
 /// HACKABLE CONSTANTS
-/// Tweak game feel here first.
 /// ============================================================
 class GameConfig {
   // Rules
   static const int maxHealth = 5;
-  static const int winScore = 35;
+  static const int finalWave = 5;
 
-  // Movement
+  // Controls
   static const double moveSpeed = 4.2;
+  static const double aimSpeed = 4.8;
   static const double playerClamp = 4.4;
+  static const double aimClamp = 3.8;
 
   // Combat
-  static const double fireCooldown = 0.24;
-
-  // Fixed crosshair position
-  // Increased from 0.58 so the aim point sits lower on screen.
+  static const double fireCooldown = 0.22;
   static const double crosshairY = 0.66;
-
-  // Auto-hit tuning
-  static const double hitPadding = 14.0;
-  static const double centerBias = 0.70;
-  static const double closeRangeBonus = 0.85;
-
-  // Very close enemies get generous hit rules
+  static const double hitPadding = 16.0;
   static const double emergencyHitDistance = 2.6;
   static const double emergencyHitPadding = 42.0;
 
-  // Spawning / enemies
-  static const double spawnStart = 1.55;
-  static const double spawnMin = 0.42;
-  static const double spawnRampPerSecond = 0.014;
-
+  // Enemy pacing
   static const double enemyStartDistanceMin = 14.0;
-  static const double enemyStartDistanceMax = 26.0;
-  static const double enemyBaseSpeed = 2.7;
+  static const double enemyStartDistanceMax = 25.0;
+  static const double enemyBaseSpeed = 2.5;
   static const double enemySpeedRamp = 0.04;
-  static const double enemyLaneSpread = 3.8;
+  static const double enemyLaneSpread = 4.0;
 
-  // Colors
+  // Wave pacing
+  static const double timeBetweenWaves = 2.6;
+  static const double waveSpawnDelay = 0.85;
+  static const double bossSpawnDelay = 1.4;
+
+  // Visuals
   static const Color accent = Color(0xFF92FF8F);
   static const Color redwoodDark = Color(0xFF3F1F14);
   static const Color redwoodMid = Color(0xFF6E3922);
@@ -78,18 +71,35 @@ enum GameState {
   lost,
 }
 
+enum EnemyType {
+  scout,
+  standard,
+  heavy,
+  boss,
+}
+
 class Enemy {
   Enemy({
     required this.x,
     required this.distance,
     required this.speed,
     required this.tint,
+    required this.type,
+    required this.radiusScale,
+    required this.health,
+    required this.maxHealth,
+    this.weave = 0.0,
   });
 
   double x;
   double distance;
   double speed;
   Color tint;
+  EnemyType type;
+  double radiusScale;
+  int health;
+  int maxHealth;
+  double weave;
 
   bool alive = true;
   double flash = 0.0;
@@ -106,9 +116,6 @@ class ShotTrace {
   double life = 0.08;
 }
 
-/// ============================================================
-/// SIMPLE MOVE STICK
-/// ============================================================
 class StickState {
   int? pointerId;
   Offset center = Offset.zero;
@@ -136,6 +143,18 @@ class StickState {
   Offset get delta => active ? current - center : Offset.zero;
 }
 
+class WavePlan {
+  WavePlan({
+    required this.number,
+    required this.spawnQueue,
+    required this.isBossWave,
+  });
+
+  final int number;
+  final List<EnemyType> spawnQueue;
+  final bool isBossWave;
+}
+
 class GamePage extends StatefulWidget {
   const GamePage({super.key});
 
@@ -154,22 +173,32 @@ class _GamePageState extends State<GamePage>
   int score = 0;
   int health = GameConfig.maxHealth;
   double survivalTime = 0.0;
-  double spawnTimer = 0.0;
-  double spawnInterval = GameConfig.spawnStart;
   double fireCooldownTimer = 0.0;
 
-  // World state
   double playerX = 0.0;
+  double aimX = 0.0;
   double bobTime = 0.0;
 
   final List<Enemy> enemies = [];
   final List<ShotTrace> traces = [];
 
   final StickState moveStick = StickState();
+  final StickState aimStick = StickState();
 
   bool firePressed = false;
   Rect fireButtonRect = Rect.zero;
   Rect pauseButtonRect = Rect.zero;
+
+  int currentWave = 0;
+  bool betweenWaves = false;
+  double betweenWaveTimer = 0.0;
+
+  WavePlan? activeWave;
+  int waveSpawnIndex = 0;
+  double waveSpawnTimer = 0.0;
+
+  String bannerText = '';
+  double bannerTimer = 0.0;
 
   @override
   void initState() {
@@ -207,15 +236,24 @@ class _GamePageState extends State<GamePage>
       score = 0;
       health = GameConfig.maxHealth;
       survivalTime = 0.0;
-      spawnTimer = 0.0;
-      spawnInterval = GameConfig.spawnStart;
       fireCooldownTimer = 0.0;
       playerX = 0.0;
+      aimX = 0.0;
       bobTime = 0.0;
       enemies.clear();
       traces.clear();
       moveStick.stop();
+      aimStick.stop();
       firePressed = false;
+      currentWave = 0;
+      betweenWaves = false;
+      betweenWaveTimer = 0.0;
+      activeWave = null;
+      waveSpawnIndex = 0;
+      waveSpawnTimer = 0.0;
+      bannerText = '';
+      bannerTimer = 0.0;
+      _beginNextWave();
       _lastTick = Duration.zero;
     });
   }
@@ -225,6 +263,7 @@ class _GamePageState extends State<GamePage>
       if (state == GameState.playing) {
         state = GameState.paused;
         moveStick.stop();
+        aimStick.stop();
         firePressed = false;
       } else if (state == GameState.paused) {
         state = GameState.playing;
@@ -237,77 +276,242 @@ class _GamePageState extends State<GamePage>
     setState(() {
       state = GameState.menu;
       moveStick.stop();
+      aimStick.stop();
       firePressed = false;
       _lastTick = Duration.zero;
     });
+  }
+
+  void _showBanner(String text, [double duration = 1.8]) {
+    bannerText = text;
+    bannerTimer = duration;
   }
 
   void _updateGame(double dt) {
     survivalTime += dt;
     fireCooldownTimer = math.max(0.0, fireCooldownTimer - dt);
 
+    if (bannerTimer > 0) {
+      bannerTimer -= dt;
+      if (bannerTimer <= 0) {
+        bannerText = '';
+      }
+    }
+
     _updateControls(dt);
-    _updateSpawning(dt);
+    _updateWaveLogic(dt);
     _updateEnemies(dt);
     _updateTraces(dt);
 
     if (health <= 0) {
       state = GameState.lost;
-    } else if (score >= GameConfig.winScore) {
+      return;
+    }
+
+    if (currentWave > GameConfig.finalWave && enemies.isEmpty) {
       state = GameState.won;
     }
   }
 
   void _updateControls(double dt) {
     double moveInput = 0.0;
+    double aimInput = 0.0;
 
     if (moveStick.active) {
       moveInput = (moveStick.delta.dx / 55.0).clamp(-1.0, 1.0);
     }
 
+    if (aimStick.active) {
+      aimInput = (aimStick.delta.dx / 55.0).clamp(-1.0, 1.0);
+    }
+
     playerX += moveInput * GameConfig.moveSpeed * dt;
+    aimX += aimInput * GameConfig.aimSpeed * dt;
+
     playerX = playerX.clamp(-GameConfig.playerClamp, GameConfig.playerClamp);
+    aimX = aimX.clamp(-GameConfig.aimClamp, GameConfig.aimClamp);
 
     bobTime += dt * (1.0 + moveInput.abs() * 2.0);
   }
 
-  void _updateSpawning(double dt) {
-    spawnInterval = math.max(
-      GameConfig.spawnMin,
-      GameConfig.spawnStart - survivalTime * GameConfig.spawnRampPerSecond,
-    );
+  void _updateWaveLogic(double dt) {
+    if (betweenWaves) {
+      betweenWaveTimer -= dt;
+      if (betweenWaveTimer <= 0) {
+        betweenWaves = false;
+        _beginNextWave();
+      }
+      return;
+    }
 
-    spawnTimer += dt;
-    if (spawnTimer >= spawnInterval) {
-      spawnTimer = 0.0;
-      _spawnEnemy();
+    if (activeWave != null && waveSpawnIndex < activeWave!.spawnQueue.length) {
+      waveSpawnTimer -= dt;
+      if (waveSpawnTimer <= 0) {
+        final type = activeWave!.spawnQueue[waveSpawnIndex];
+        _spawnEnemy(type);
+        waveSpawnIndex += 1;
+
+        waveSpawnTimer = activeWave!.isBossWave
+            ? GameConfig.bossSpawnDelay
+            : GameConfig.waveSpawnDelay;
+      }
+    }
+
+    final bool waveFullySpawned =
+        activeWave != null && waveSpawnIndex >= activeWave!.spawnQueue.length;
+
+    if (waveFullySpawned && enemies.isEmpty) {
+      if (currentWave >= GameConfig.finalWave) {
+        currentWave = GameConfig.finalWave + 1;
+      } else {
+        betweenWaves = true;
+        betweenWaveTimer = GameConfig.timeBetweenWaves;
+        _showBanner('WAVE CLEAR');
+      }
     }
   }
 
-  void _spawnEnemy() {
+  void _beginNextWave() {
+    currentWave += 1;
+
+    if (currentWave > GameConfig.finalWave) {
+      activeWave = null;
+      return;
+    }
+
+    activeWave = _buildWave(currentWave);
+    waveSpawnIndex = 0;
+    waveSpawnTimer = 0.4;
+
+    if (activeWave!.isBossWave) {
+      _showBanner('BOSS WAVE $currentWave');
+    } else {
+      _showBanner('WAVE $currentWave');
+    }
+  }
+
+  WavePlan _buildWave(int waveNumber) {
+    switch (waveNumber) {
+      case 1:
+        return WavePlan(
+          number: 1,
+          isBossWave: false,
+          spawnQueue: List.generate(6, (_) => EnemyType.standard),
+        );
+      case 2:
+        return WavePlan(
+          number: 2,
+          isBossWave: false,
+          spawnQueue: [
+            EnemyType.standard,
+            EnemyType.scout,
+            EnemyType.standard,
+            EnemyType.scout,
+            EnemyType.standard,
+            EnemyType.heavy,
+            EnemyType.standard,
+          ],
+        );
+      case 3:
+        return WavePlan(
+          number: 3,
+          isBossWave: true,
+          spawnQueue: [
+            EnemyType.standard,
+            EnemyType.scout,
+            EnemyType.boss,
+          ],
+        );
+      case 4:
+        return WavePlan(
+          number: 4,
+          isBossWave: false,
+          spawnQueue: [
+            EnemyType.scout,
+            EnemyType.scout,
+            EnemyType.standard,
+            EnemyType.heavy,
+            EnemyType.standard,
+            EnemyType.scout,
+            EnemyType.heavy,
+            EnemyType.standard,
+          ],
+        );
+      case 5:
+      default:
+        return WavePlan(
+          number: 5,
+          isBossWave: true,
+          spawnQueue: [
+            EnemyType.heavy,
+            EnemyType.standard,
+            EnemyType.boss,
+            EnemyType.scout,
+            EnemyType.boss,
+          ],
+        );
+    }
+  }
+
+  void _spawnEnemy(EnemyType type) {
     final distance = _rng.nextDouble() *
             (GameConfig.enemyStartDistanceMax -
                 GameConfig.enemyStartDistanceMin) +
         GameConfig.enemyStartDistanceMin;
 
-    final speed = GameConfig.enemyBaseSpeed +
-        (survivalTime * GameConfig.enemySpeedRamp) +
-        _rng.nextDouble() * 0.7;
+    double x = (_rng.nextDouble() * 2 - 1) * GameConfig.enemyLaneSpread;
 
-    final x = (_rng.nextDouble() * 2 - 1) * GameConfig.enemyLaneSpread;
+    double speed;
+    Color tint;
+    double radiusScale;
+    int hp;
+    double weave;
 
-    final tints = [
-      const Color(0xFFC9D0D6),
-      const Color(0xFFB5BEC7),
-      const Color(0xFFE4D18B),
-    ];
+    switch (type) {
+      case EnemyType.scout:
+        speed = GameConfig.enemyBaseSpeed + 1.1 + currentWave * 0.08;
+        tint = const Color(0xFFD8E0EA);
+        radiusScale = 0.82;
+        hp = 1;
+        weave = 1.4;
+        break;
+      case EnemyType.heavy:
+        speed = GameConfig.enemyBaseSpeed - 0.2 + currentWave * 0.05;
+        tint = const Color(0xFFE1C77A);
+        radiusScale = 1.18;
+        hp = 2;
+        weave = 0.2;
+        break;
+      case EnemyType.boss:
+        speed = GameConfig.enemyBaseSpeed - 0.45 + currentWave * 0.04;
+        tint = const Color(0xFFFFC36E);
+        radiusScale = 1.75;
+        hp = 5;
+        weave = 0.1;
+        x *= 0.45;
+        break;
+      case EnemyType.standard:
+        speed = GameConfig.enemyBaseSpeed +
+            (currentWave * GameConfig.enemySpeedRamp) +
+            _rng.nextDouble() * 0.45;
+        tint = const Color(0xFFC9D0D6);
+        radiusScale = 1.0;
+        hp = 1;
+        weave = 0.45;
+        break;
+    }
 
     enemies.add(
       Enemy(
         x: x,
         distance: distance,
         speed: speed,
-        tint: tints[_rng.nextInt(tints.length)],
+        tint: tint,
+        type: type,
+        radiusScale: radiusScale,
+        health: hp,
+        maxHealth: hp,
+        weave: weave,
       ),
     );
   }
@@ -329,8 +533,15 @@ class _GamePageState extends State<GamePage>
       final driftTarget = playerX * 0.65;
       enemy.x += (driftTarget - enemy.x) * dt * 0.65;
 
+      if (enemy.weave != 0) {
+        enemy.x += math.sin(survivalTime * (1.5 + enemy.weave)) *
+            enemy.weave *
+            dt *
+            0.9;
+      }
+
       if (enemy.distance <= 0.8) {
-        health -= 1;
+        health -= enemy.type == EnemyType.boss ? 2 : 1;
         dead.add(enemy);
       }
     }
@@ -367,36 +578,24 @@ class _GamePageState extends State<GamePage>
       if (!enemy.alive) continue;
 
       final enemyScreen = _enemyScreenPosition(enemy, size);
-      final radius = _enemyRadius(enemy.distance);
+      final radius = _enemyRadius(enemy.distance) * enemy.radiusScale;
 
       final dx = (enemyScreen.dx - crosshair.dx).abs();
       final dy = (enemyScreen.dy - crosshair.dy).abs();
 
-      final bool directlyHit =
-          dx <= (radius + GameConfig.hitPadding) &&
+      final directlyHit = dx <= (radius + GameConfig.hitPadding) &&
           dy <= (radius + GameConfig.hitPadding);
 
-      final bool emergencyCloseHit =
+      final emergencyCloseHit =
           enemy.distance <= GameConfig.emergencyHitDistance &&
-          dx <= (radius + GameConfig.emergencyHitPadding);
+              dx <= (radius + GameConfig.emergencyHitPadding);
 
-      if (!directlyHit && !emergencyCloseHit) {
-        continue;
-      }
+      if (!directlyHit && !emergencyCloseHit) continue;
 
-      final double centerDistance =
+      final centerDistance =
           (enemyScreen - crosshair).distance / math.max(radius, 1.0);
-
-      final double closenessBonus =
-          (1.0 / math.max(enemy.distance, 1.0)) * GameConfig.closeRangeBonus;
-
-      final double emergencyBonus =
-          enemy.distance <= GameConfig.emergencyHitDistance ? 0.75 : 0.0;
-
-      final double scoreValue =
-          centerDistance * GameConfig.centerBias -
-          closenessBonus -
-          emergencyBonus;
+      final closeBonus = 1.0 / math.max(enemy.distance, 1.0);
+      final scoreValue = centerDistance - closeBonus * 0.85;
 
       if (scoreValue < bestScore) {
         bestScore = scoreValue;
@@ -405,9 +604,19 @@ class _GamePageState extends State<GamePage>
     }
 
     if (bestTarget != null) {
-      bestTarget.alive = false;
+      bestTarget.health -= 1;
       bestTarget.flash = 0.18;
-      score += 1;
+
+      if (bestTarget.health <= 0) {
+        bestTarget.alive = false;
+        score += bestTarget.type == EnemyType.boss
+            ? 10
+            : bestTarget.type == EnemyType.heavy
+                ? 3
+                : bestTarget.type == EnemyType.scout
+                    ? 2
+                    : 1;
+      }
     }
   }
 
@@ -428,8 +637,14 @@ class _GamePageState extends State<GamePage>
       return;
     }
 
-    if (!moveStick.active) {
-      moveStick.start(event.pointer, p);
+    if (p.dx < size.width * 0.5) {
+      if (!moveStick.active) {
+        moveStick.start(event.pointer, p);
+      }
+    } else {
+      if (!aimStick.active) {
+        aimStick.start(event.pointer, p);
+      }
     }
   }
 
@@ -438,12 +653,16 @@ class _GamePageState extends State<GamePage>
 
     if (event.pointer == moveStick.pointerId) {
       moveStick.update(event.localPosition);
+    } else if (event.pointer == aimStick.pointerId) {
+      aimStick.update(event.localPosition);
     }
   }
 
   void _handlePointerUp(PointerEvent event) {
     if (event.pointer == moveStick.pointerId) {
       moveStick.stop();
+    } else if (event.pointer == aimStick.pointerId) {
+      aimStick.stop();
     }
     firePressed = false;
   }
@@ -473,13 +692,13 @@ class _GamePageState extends State<GamePage>
 
   Offset _crosshairScreenPosition(Size size) {
     return Offset(
-      size.width / 2,
+      size.width / 2 + aimX * 36,
       size.height * GameConfig.crosshairY,
     );
   }
 
   Rect _calcFireButtonRect(Size size) {
-    final double buttonSize = math.min(size.width * 0.16, 92);
+    final buttonSize = math.min(size.width * 0.16, 92);
     return Rect.fromLTWH(
       size.width - buttonSize - 18,
       size.height - buttonSize - 90,
@@ -518,6 +737,7 @@ class _GamePageState extends State<GamePage>
                     bobTime: bobTime,
                     state: state,
                     firePressed: firePressed,
+                    currentWave: currentWave,
                     worldXToScreen: _worldXToScreen,
                     enemyScreenY: _enemyScreenY,
                     enemyRadius: _enemyRadius,
@@ -526,6 +746,9 @@ class _GamePageState extends State<GamePage>
                 ),
                 if (state == GameState.playing || state == GameState.paused)
                   _buildHud(size),
+                if (bannerText.isNotEmpty &&
+                    (state == GameState.playing || state == GameState.paused))
+                  _buildBanner(),
                 if (state == GameState.menu) _buildMenuOverlay(),
                 if (state == GameState.paused) _buildPauseOverlay(),
                 if (state == GameState.won || state == GameState.lost)
@@ -540,6 +763,7 @@ class _GamePageState extends State<GamePage>
 
   Widget _buildHud(Size size) {
     final leftCenter = Offset(85, size.height - 95);
+    final rightCenter = Offset(size.width - 105, size.height - 210);
 
     return SafeArea(
       child: Stack(
@@ -564,9 +788,9 @@ class _GamePageState extends State<GamePage>
                   spacing: 8,
                   runSpacing: 8,
                   children: [
+                    _pill('Wave: $currentWave'),
                     _pill('Score: $score'),
                     _pill('Health: $health'),
-                    _pill('Time: ${survivalTime.toStringAsFixed(1)}'),
                   ],
                 ),
               ],
@@ -585,10 +809,7 @@ class _GamePageState extends State<GamePage>
                   color: GameConfig.accent.withValues(alpha: 0.55),
                 ),
               ),
-              child: Icon(
-                Icons.pause,
-                color: GameConfig.accent,
-              ),
+              child: Icon(Icons.pause, color: GameConfig.accent),
             ),
           ),
           _buildStickVisual(
@@ -596,6 +817,12 @@ class _GamePageState extends State<GamePage>
             knob: moveStick.active ? moveStick.current : leftCenter,
             label: 'MOVE',
             active: moveStick.active,
+          ),
+          _buildStickVisual(
+            center: aimStick.active ? aimStick.center : rightCenter,
+            knob: aimStick.active ? aimStick.current : rightCenter,
+            label: 'AIM',
+            active: aimStick.active,
           ),
           Positioned(
             right: 18,
@@ -612,12 +839,6 @@ class _GamePageState extends State<GamePage>
                   color: Colors.redAccent.withValues(alpha: 0.95),
                   width: 2.5,
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    blurRadius: 18,
-                    color: Colors.redAccent.withValues(alpha: 0.24),
-                  ),
-                ],
               ),
               child: const Center(
                 child: Text(
@@ -641,7 +862,7 @@ class _GamePageState extends State<GamePage>
     required String label,
     required bool active,
   }) {
-    final Offset clamped = _clampKnob(center, knob, 34);
+    final clamped = _clampKnob(center, knob, 34);
 
     return Positioned(
       left: center.dx - 45,
@@ -722,6 +943,36 @@ class _GamePageState extends State<GamePage>
     );
   }
 
+  Widget _buildBanner() {
+    return SafeArea(
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: Padding(
+          padding: const EdgeInsets.only(top: 84),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.45),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: GameConfig.accent.withValues(alpha: 0.45),
+              ),
+            ),
+            child: Text(
+              bannerText,
+              style: TextStyle(
+                color: GameConfig.accent,
+                fontWeight: FontWeight.bold,
+                fontSize: 20,
+                letterSpacing: 1.2,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildMenuOverlay() {
     return Container(
       color: Colors.black.withValues(alpha: 0.72),
@@ -735,12 +986,6 @@ class _GamePageState extends State<GamePage>
             border: Border.all(
               color: GameConfig.accent.withValues(alpha: 0.48),
             ),
-            boxShadow: [
-              BoxShadow(
-                blurRadius: 18,
-                color: Colors.black.withValues(alpha: 0.45),
-              ),
-            ],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -756,12 +1001,12 @@ class _GamePageState extends State<GamePage>
               ),
               const SizedBox(height: 14),
               const Text(
-                'A retro forest corridor shooter.\nDefend the redwood passage from invading machines.',
+                'Retro forest corridor shooter.\nNow with waves, bosses, move + aim sticks.',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 18),
               const Text(
-                'Move stick: dodge left and right\nCrosshair is fixed lower center\nFire button: shoot\nPause button: top right',
+                'Left stick: move\nRight stick: aim\nFire button: shoot\nPause button: top right',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 22),
@@ -838,7 +1083,7 @@ class _GamePageState extends State<GamePage>
   }
 
   Widget _buildEndOverlay() {
-    final bool won = state == GameState.won;
+    final won = state == GameState.won;
 
     return Container(
       color: Colors.black.withValues(alpha: 0.68),
@@ -857,7 +1102,7 @@ class _GamePageState extends State<GamePage>
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                won ? 'PASSAGE SECURED' : 'FOREST BREACHED',
+                won ? 'FOREST SECURED' : 'FOREST BREACHED',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 26,
@@ -869,8 +1114,8 @@ class _GamePageState extends State<GamePage>
               const SizedBox(height: 14),
               Text(
                 won
-                    ? 'You held the redwood corridor.'
-                    : 'Too many invaders broke through.',
+                    ? 'You survived every wave.'
+                    : 'The invaders broke through.',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 10),
@@ -882,7 +1127,7 @@ class _GamePageState extends State<GamePage>
                 ),
               ),
               const SizedBox(height: 6),
-              Text('Survival Time: ${survivalTime.toStringAsFixed(1)}s'),
+              Text('Wave Reached: $currentWave'),
               const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,
@@ -918,6 +1163,7 @@ class RedwoodPainter extends CustomPainter {
     required this.bobTime,
     required this.state,
     required this.firePressed,
+    required this.currentWave,
     required this.worldXToScreen,
     required this.enemyScreenY,
     required this.enemyRadius,
@@ -931,6 +1177,7 @@ class RedwoodPainter extends CustomPainter {
   final double bobTime;
   final GameState state;
   final bool firePressed;
+  final int currentWave;
   final Offset crosshairPosition;
 
   final double Function(double worldX, double distance, Size size)
@@ -949,8 +1196,8 @@ class RedwoodPainter extends CustomPainter {
   }
 
   void _paintBackground(Canvas canvas, Size size) {
-    final Rect sky = Rect.fromLTWH(0, 0, size.width, size.height * 0.58);
-    final Paint skyPaint = Paint()
+    final sky = Rect.fromLTWH(0, 0, size.width, size.height * 0.58);
+    final skyPaint = Paint()
       ..shader = const LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
@@ -963,7 +1210,7 @@ class RedwoodPainter extends CustomPainter {
 
     canvas.drawRect(sky, skyPaint);
 
-    final Paint mistPaint = Paint()
+    final mistPaint = Paint()
       ..color = GameConfig.mist.withValues(alpha: 0.13);
     canvas.drawOval(
       Rect.fromCenter(
@@ -976,27 +1223,27 @@ class RedwoodPainter extends CustomPainter {
   }
 
   void _paintRedwoodHallway(Canvas canvas, Size size) {
-    final double horizonY = size.height * 0.40;
-    final double corridorBottom = size.height;
-    final double corridorHalfTop = size.width * 0.10;
-    final double corridorHalfBottom = size.width * 0.43;
-    final double shift = -playerX * 22;
+    final horizonY = size.height * 0.40;
+    final corridorBottom = size.height;
+    final corridorHalfTop = size.width * 0.10;
+    final corridorHalfBottom = size.width * 0.43;
+    final shift = -playerX * 22;
 
-    final Path leftForest = Path()
+    final leftForest = Path()
       ..moveTo(0, corridorBottom)
       ..lineTo(size.width / 2 - corridorHalfBottom + shift, corridorBottom)
       ..lineTo(size.width / 2 - corridorHalfTop + shift, horizonY)
       ..lineTo(0, horizonY * 0.88)
       ..close();
 
-    final Path rightForest = Path()
+    final rightForest = Path()
       ..moveTo(size.width, corridorBottom)
       ..lineTo(size.width / 2 + corridorHalfBottom + shift, corridorBottom)
       ..lineTo(size.width / 2 + corridorHalfTop + shift, horizonY)
       ..lineTo(size.width, horizonY * 0.88)
       ..close();
 
-    final Paint forestPaint = Paint()
+    final forestPaint = Paint()
       ..shader = const LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
@@ -1011,14 +1258,14 @@ class RedwoodPainter extends CustomPainter {
     canvas.drawPath(leftForest, forestPaint);
     canvas.drawPath(rightForest, forestPaint);
 
-    final Path trail = Path()
+    final trail = Path()
       ..moveTo(size.width / 2 - corridorHalfBottom + shift, corridorBottom)
       ..lineTo(size.width / 2 + corridorHalfBottom + shift, corridorBottom)
       ..lineTo(size.width / 2 + corridorHalfTop + shift, horizonY)
       ..lineTo(size.width / 2 - corridorHalfTop + shift, horizonY)
       ..close();
 
-    final Paint trailPaint = Paint()
+    final trailPaint = Paint()
       ..shader = const LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
@@ -1033,14 +1280,14 @@ class RedwoodPainter extends CustomPainter {
 
     canvas.drawPath(trail, trailPaint);
 
-    final Paint linePaint = Paint()
+    final linePaint = Paint()
       ..color = Colors.black.withValues(alpha: 0.22)
       ..strokeWidth = 1.4;
 
     for (int i = 1; i <= 9; i++) {
-      final double t = i / 10;
-      final double y = _lerp(horizonY, corridorBottom, t * t);
-      final double halfW = _lerp(corridorHalfTop, corridorHalfBottom, t);
+      final t = i / 10;
+      final y = _lerp(horizonY, corridorBottom, t * t);
+      final halfW = _lerp(corridorHalfTop, corridorHalfBottom, t);
       canvas.drawLine(
         Offset(size.width / 2 - halfW + shift, y),
         Offset(size.width / 2 + halfW + shift, y),
@@ -1048,7 +1295,7 @@ class RedwoodPainter extends CustomPainter {
       );
     }
 
-    final Paint edgeGlow = Paint()
+    final edgeGlow = Paint()
       ..color = GameConfig.redwoodGlow.withValues(alpha: 0.20)
       ..strokeWidth = 3.0;
 
@@ -1075,22 +1322,22 @@ class RedwoodPainter extends CustomPainter {
     double bottomY,
     double shift,
   ) {
-    final Paint bark = Paint()..color = GameConfig.redwoodMid;
-    final Paint barkDark = Paint()..color = GameConfig.redwoodDark;
-    final Paint moss = Paint()
+    final bark = Paint()..color = GameConfig.redwoodMid;
+    final barkDark = Paint()..color = GameConfig.redwoodDark;
+    final moss = Paint()
       ..color = const Color(0xFF28452B).withValues(alpha: 0.45);
 
     for (int i = 0; i < 7; i++) {
-      final double t = (i + 1) / 8;
-      final double y = _lerp(horizonY + 10, bottomY + 30, t * t);
-      final double trunkHeight = _lerp(24, 260, t);
-      final double trunkWidth = _lerp(5, 68, t);
+      final t = (i + 1) / 8;
+      final y = _lerp(horizonY + 10, bottomY + 30, t * t);
+      final trunkHeight = _lerp(24, 260, t);
+      final trunkWidth = _lerp(5, 68, t);
 
-      final double edgeX = left
+      final edgeX = left
           ? _lerp(size.width * 0.40 + shift, 12 + shift, t)
           : _lerp(size.width * 0.60 + shift, size.width - 12 + shift, t);
 
-      final Rect trunkRect = Rect.fromCenter(
+      final trunkRect = Rect.fromCenter(
         center: Offset(edgeX, y - trunkHeight * 0.45),
         width: trunkWidth,
         height: trunkHeight,
@@ -1137,19 +1384,19 @@ class RedwoodPainter extends CustomPainter {
     final sorted = [...enemies]..sort((a, b) => b.distance.compareTo(a.distance));
 
     for (final enemy in sorted) {
-      final double x = worldXToScreen(enemy.x - playerX, enemy.distance, size);
-      final double y = enemyScreenY(enemy.distance, size);
-      final double r = enemyRadius(enemy.distance);
+      final x = worldXToScreen(enemy.x - playerX, enemy.distance, size);
+      final y = enemyScreenY(enemy.distance, size);
+      final r = enemyRadius(enemy.distance) * enemy.radiusScale;
 
-      final Paint bodyPaint = Paint()
+      final bodyPaint = Paint()
         ..color = enemy.alive
             ? enemy.tint
             : Colors.white.withValues(alpha: enemy.flash.clamp(0.0, 1.0));
 
-      final Paint eyePaint = Paint()..color = Colors.redAccent;
-      final Paint limbPaint = Paint()
+      final eyePaint = Paint()..color = Colors.redAccent;
+      final limbPaint = Paint()
         ..color = const Color(0xFF87929C)
-        ..strokeWidth = math.max(2.0, r * 0.12)
+        ..strokeWidth = math.max(2.0, r * 0.10)
         ..strokeCap = StrokeCap.round;
 
       canvas.drawLine(
@@ -1189,12 +1436,36 @@ class RedwoodPainter extends CustomPainter {
       canvas.drawCircle(Offset(x, y - r * 0.92), r * 0.40, bodyPaint);
       canvas.drawCircle(Offset(x - r * 0.10, y - r * 0.95), r * 0.05, eyePaint);
       canvas.drawCircle(Offset(x + r * 0.10, y - r * 0.95), r * 0.05, eyePaint);
+
+      if (enemy.maxHealth > 1 && enemy.alive) {
+        final bg = Paint()..color = Colors.black.withValues(alpha: 0.45);
+        final fg = Paint()..color = Colors.redAccent;
+        final width = r * 1.0;
+        final left = x - width / 2;
+        final top = y - r * 1.55;
+
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(left, top, width, 6),
+            const Radius.circular(3),
+          ),
+          bg,
+        );
+
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(left, top, width * (enemy.health / enemy.maxHealth), 6),
+            const Radius.circular(3),
+          ),
+          fg,
+        );
+      }
     }
   }
 
   void _paintTraces(Canvas canvas) {
     for (final trace in traces) {
-      final Paint p = Paint()
+      final p = Paint()
         ..color = GameConfig.accent.withValues(
           alpha: (trace.life / 0.08).clamp(0.0, 1.0),
         )
@@ -1207,7 +1478,7 @@ class RedwoodPainter extends CustomPainter {
   void _paintCrosshair(Canvas canvas) {
     if (state == GameState.menu) return;
 
-    final Offset c = crosshairPosition;
+    final c = crosshairPosition;
 
     final glowPaint = Paint()
       ..color = GameConfig.accent.withValues(alpha: 0.12)
@@ -1232,18 +1503,18 @@ class RedwoodPainter extends CustomPainter {
   }
 
   void _paintWeapon(Canvas canvas, Size size) {
-    final double bobX = math.sin(bobTime * 3.2) * 4;
-    final double bobY = math.sin(bobTime * 6.4) * 3;
-    final double centerX = size.width / 2 + bobX;
-    final double baseY = size.height * 0.88 + bobY + (firePressed ? 4 : 0);
+    final bobX = math.sin(bobTime * 3.2) * 4;
+    final bobY = math.sin(bobTime * 6.4) * 3;
+    final centerX = size.width / 2 + bobX;
+    final baseY = size.height * 0.88 + bobY + (firePressed ? 4 : 0);
 
-    final Paint wood = Paint()..color = const Color(0xFF5C3A24);
-    final Paint darkWood = Paint()..color = const Color(0xFF3D2417);
-    final Paint metal = Paint()..color = const Color(0xFFC2CCD2);
-    final Paint stringPaint = Paint()
+    final wood = Paint()..color = const Color(0xFF5C3A24);
+    final darkWood = Paint()..color = const Color(0xFF3D2417);
+    final metal = Paint()..color = const Color(0xFFC2CCD2);
+    final stringPaint = Paint()
       ..color = const Color(0xFFE9DFC7)
       ..strokeWidth = 2.2;
-    final Paint glow = Paint()
+    final glow = Paint()
       ..color = GameConfig.accent.withValues(alpha: firePressed ? 0.55 : 0.18);
 
     canvas.drawRRect(
