@@ -725,7 +725,7 @@ class _GamePageState extends State<GamePage>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'CANOPY DEFENSE',
+                  'Wookies Revenge',
                   style: TextStyle(
                     color: GameConfig.accent,
                     fontSize: 22,
@@ -944,7 +944,7 @@ class _GamePageState extends State<GamePage>
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'CANOPY DEFENSE',
+                'Wookies Revenge',
                 style: TextStyle(
                   color: GameConfig.accent,
                   fontSize: 30,
