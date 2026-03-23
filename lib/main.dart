@@ -11,7 +11,7 @@ class CanopyDefenseApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Canopy Defense',
+      title: 'Wookies Revenge',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark(),
       home: const GamePage(),
