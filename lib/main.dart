@@ -22,6 +22,8 @@ class CanopyDefenseApp extends StatelessWidget {
 
 /// ============================================================
 /// HACKABLE CONSTANTS
+/// Change values here first to tune controls, waves, bosses,
+/// enemy speed/health, crosshair feel, and pacing.
 /// ============================================================
 class GameConfig {
   static const int maxHealth = 5;
@@ -385,11 +387,6 @@ class _GamePageState extends State<GamePage>
   }
 
   WavePlan _buildWave(int waveNumber) {
-    final isBossWave = waveNumber == 3 ||
-        waveNumber == 6 ||
-        waveNumber == 9 ||
-        waveNumber == 10;
-
     switch (waveNumber) {
       case 1:
         return WavePlan(
@@ -1486,56 +1483,83 @@ class RedwoodPainter extends CustomPainter {
             ? enemy.tint
             : Colors.white.withValues(alpha: enemy.flash.clamp(0.0, 1.0));
 
+      final darkPaint = Paint()..color = const Color(0xFF7A848D);
       final eyePaint = Paint()..color = Colors.redAccent;
       final limbPaint = Paint()
-        ..color = const Color(0xFF87929C)
+        ..color = const Color(0xFF8C979F)
         ..strokeWidth = math.max(2.0, r * 0.10)
         ..strokeCap = StrokeCap.round;
 
-      canvas.drawLine(
-        Offset(x - r * 0.28, y + r * 0.72),
-        Offset(x - r * 0.48, y + r * 1.32),
-        limbPaint,
-      );
-      canvas.drawLine(
-        Offset(x + r * 0.28, y + r * 0.72),
-        Offset(x + r * 0.48, y + r * 1.32),
-        limbPaint,
-      );
+      final headPath = Path()
+        ..moveTo(x, y - r * 1.38)
+        ..lineTo(x - r * 0.42, y - r * 0.74)
+        ..lineTo(x + r * 0.42, y - r * 0.74)
+        ..close();
+      canvas.drawPath(headPath, bodyPaint);
 
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromCenter(
-            center: Offset(x, y),
-            width: r * 1.05,
-            height: r * 1.50,
+            center: Offset(x, y - r * 0.92),
+            width: r * 0.42,
+            height: r * 0.10,
           ),
-          Radius.circular(r * 0.16),
+          Radius.circular(r * 0.03),
         ),
-        bodyPaint,
+        darkPaint,
+      );
+      canvas.drawCircle(Offset(x - r * 0.10, y - r * 0.92), r * 0.04, eyePaint);
+      canvas.drawCircle(Offset(x + r * 0.10, y - r * 0.92), r * 0.04, eyePaint);
+
+      final torsoPath = Path()
+        ..moveTo(x, y - r * 0.52)
+        ..lineTo(x - r * 0.54, y - r * 0.10)
+        ..lineTo(x - r * 0.36, y + r * 0.76)
+        ..lineTo(x + r * 0.36, y + r * 0.76)
+        ..lineTo(x + r * 0.54, y - r * 0.10)
+        ..close();
+      canvas.drawPath(torsoPath, bodyPaint);
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(x, y + r * 0.10),
+            width: r * 0.22,
+            height: r * 0.58,
+          ),
+          Radius.circular(r * 0.05),
+        ),
+        darkPaint,
       );
 
       canvas.drawLine(
-        Offset(x - r * 0.45, y - r * 0.05),
-        Offset(x - r * 0.98, y + r * 0.25),
+        Offset(x - r * 0.34, y - r * 0.04),
+        Offset(x - r * 0.96, y + r * 0.28),
         limbPaint,
       );
       canvas.drawLine(
-        Offset(x + r * 0.45, y - r * 0.05),
-        Offset(x + r * 0.98, y + r * 0.25),
+        Offset(x + r * 0.34, y - r * 0.04),
+        Offset(x + r * 0.96, y + r * 0.28),
         limbPaint,
       );
 
-      canvas.drawCircle(Offset(x, y - r * 0.92), r * 0.40, bodyPaint);
-      canvas.drawCircle(Offset(x - r * 0.10, y - r * 0.95), r * 0.05, eyePaint);
-      canvas.drawCircle(Offset(x + r * 0.10, y - r * 0.95), r * 0.05, eyePaint);
+      canvas.drawLine(
+        Offset(x - r * 0.18, y + r * 0.70),
+        Offset(x - r * 0.42, y + r * 1.34),
+        limbPaint,
+      );
+      canvas.drawLine(
+        Offset(x + r * 0.18, y + r * 0.70),
+        Offset(x + r * 0.42, y + r * 1.34),
+        limbPaint,
+      );
 
       if (enemy.maxHealth > 1 && enemy.alive) {
         final bg = Paint()..color = Colors.black.withValues(alpha: 0.45);
         final fg = Paint()..color = Colors.redAccent;
         final width = r * 1.0;
         final left = x - width / 2;
-        final top = y - r * 1.55;
+        final top = y - r * 1.70;
 
         canvas.drawRRect(
           RRect.fromRectAndRadius(
@@ -1599,83 +1623,116 @@ class RedwoodPainter extends CustomPainter {
     final bobX = math.sin(bobTime * 3.2) * 4;
     final bobY = math.sin(bobTime * 6.4) * 3;
     final centerX = size.width / 2 + bobX;
-    final baseY = size.height * 0.88 + bobY + (firePressed ? 4 : 0);
+    final baseY = size.height * 0.885 + bobY + (firePressed ? 4 : 0);
 
-    final wood = Paint()..color = const Color(0xFF5C3A24);
-    final darkWood = Paint()..color = const Color(0xFF3D2417);
-    final metal = Paint()..color = const Color(0xFFC2CCD2);
+    final wood = Paint()..color = const Color(0xFF5A3A24);
+    final darkWood = Paint()..color = const Color(0xFF3A2417);
+    final metal = Paint()..color = const Color(0xFFB8C2C9);
+    final darkMetal = Paint()..color = const Color(0xFF7E8A92);
     final stringPaint = Paint()
-      ..color = const Color(0xFFE9DFC7)
-      ..strokeWidth = 2.2;
-    final glow = Paint()
-      ..color = GameConfig.accent.withValues(alpha: firePressed ? 0.55 : 0.18);
+      ..color = const Color(0xFFE7DEC8)
+      ..strokeWidth = 2.4;
+    final energyGlow = Paint()
+      ..color = GameConfig.accent.withValues(alpha: firePressed ? 0.55 : 0.22);
+    final nodePaint = Paint()..color = const Color(0xFFC9D3DA);
+    final nodeGlow = Paint()
+      ..color = GameConfig.accent.withValues(alpha: firePressed ? 0.45 : 0.18);
 
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromCenter(
           center: Offset(centerX, baseY),
-          width: 52,
-          height: 125,
+          width: 70,
+          height: 138,
         ),
-        const Radius.circular(10),
+        const Radius.circular(12),
       ),
       wood,
     );
 
-    canvas.drawRect(
-      Rect.fromCenter(
-        center: Offset(centerX - 10, baseY),
-        width: 10,
-        height: 125,
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(
+          center: Offset(centerX - 12, baseY),
+          width: 14,
+          height: 138,
+        ),
+        const Radius.circular(8),
       ),
       darkWood,
     );
 
-    canvas.drawLine(
-      Offset(centerX - 88, baseY - 34),
-      Offset(centerX + 88, baseY - 34),
-      metal..strokeWidth = 8,
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(
+          center: Offset(centerX, baseY - 46),
+          width: 126,
+          height: 28,
+        ),
+        const Radius.circular(10),
+      ),
+      darkMetal,
     );
 
-    metal.strokeWidth = 5;
-    canvas.drawLine(
-      Offset(centerX - 88, baseY - 34),
-      Offset(centerX - 112, baseY - 72),
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(
+          center: Offset(centerX, baseY - 25),
+          width: 20,
+          height: 88,
+        ),
+        const Radius.circular(8),
+      ),
       metal,
     );
-    canvas.drawLine(
-      Offset(centerX + 88, baseY - 34),
-      Offset(centerX + 112, baseY - 72),
-      metal,
-    );
 
-    canvas.drawLine(
-      Offset(centerX - 112, baseY - 72),
-      Offset(centerX, baseY - 9),
-      stringPaint,
-    );
-    canvas.drawLine(
-      Offset(centerX + 112, baseY - 72),
-      Offset(centerX, baseY - 9),
-      stringPaint,
-    );
+    final leftArmBase = Offset(centerX - 96, baseY - 34);
+    final rightArmBase = Offset(centerX + 96, baseY - 34);
+    final leftArmTip = Offset(centerX - 128, baseY - 76);
+    final rightArmTip = Offset(centerX + 128, baseY - 76);
 
-    canvas.drawRect(
-      Rect.fromCenter(
-        center: Offset(centerX, baseY - 25),
-        width: 12,
-        height: 78,
+    final armPaint = Paint()
+      ..color = metal.color
+      ..strokeWidth = 8
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawLine(Offset(centerX - 42, baseY - 34), leftArmBase, armPaint);
+    canvas.drawLine(Offset(centerX + 42, baseY - 34), rightArmBase, armPaint);
+
+    armPaint.strokeWidth = 6;
+    canvas.drawLine(leftArmBase, leftArmTip, armPaint);
+    canvas.drawLine(rightArmBase, rightArmTip, armPaint);
+
+    canvas.drawCircle(leftArmTip, 12, nodeGlow);
+    canvas.drawCircle(rightArmTip, 12, nodeGlow);
+    canvas.drawCircle(leftArmTip, 9, nodePaint);
+    canvas.drawCircle(rightArmTip, 9, nodePaint);
+
+    canvas.drawLine(leftArmTip, Offset(centerX, baseY - 8), stringPaint);
+    canvas.drawLine(rightArmTip, Offset(centerX, baseY - 8), stringPaint);
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(
+          center: Offset(centerX, baseY - 57),
+          width: 8,
+          height: 36,
+        ),
+        const Radius.circular(4),
       ),
-      Paint()..color = const Color(0xFFBBC7CD),
+      energyGlow,
     );
 
-    canvas.drawRect(
-      Rect.fromCenter(
-        center: Offset(centerX, baseY - 55),
-        width: 6,
-        height: 32,
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(
+          center: Offset(centerX, baseY + 36),
+          width: 34,
+          height: 58,
+        ),
+        const Radius.circular(8),
       ),
-      glow,
+      darkMetal,
     );
   }
 
