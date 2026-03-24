@@ -1,8 +1,10 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+
 import '../config/game_config.dart';
 import '../game/helpers.dart';
 import '../models/enemy.dart';
+import '../models/enemy_projectile.dart';
 import '../models/game_types.dart';
 import '../models/shot_trace.dart';
 
@@ -10,12 +12,15 @@ class RedwoodPainter extends CustomPainter {
   RedwoodPainter({
     required this.size,
     required this.enemies,
+    required this.enemyProjectiles,
     required this.traces,
     required this.playerX,
     required this.bobTime,
     required this.state,
     required this.currentWave,
     required this.firePressed,
+    required this.bossHealth,
+    required this.bossMaxHealth,
     required this.worldXToScreen,
     required this.enemyScreenY,
     required this.enemyRadius,
@@ -24,12 +29,15 @@ class RedwoodPainter extends CustomPainter {
 
   final Size size;
   final List<Enemy> enemies;
+  final List<EnemyProjectile> enemyProjectiles;
   final List<ShotTrace> traces;
   final double playerX;
   final double bobTime;
   final GameState state;
   final int currentWave;
   final bool firePressed;
+  final int bossHealth;
+  final int bossMaxHealth;
   final Offset crosshairPosition;
 
   final double Function(double worldX, double distance, Size size)
@@ -42,9 +50,11 @@ class RedwoodPainter extends CustomPainter {
     _paintBackground(canvas, size);
     _paintRedwoodHallway(canvas, size);
     _paintEnemies(canvas, size);
+    _paintEnemyProjectiles(canvas, size);
     _paintTraces(canvas);
     _paintCrosshair(canvas);
     _paintWeapon(canvas, size);
+    _paintBossHealthBar(canvas, size);
   }
 
   void _paintBackground(Canvas canvas, Size size) {
@@ -342,6 +352,33 @@ class RedwoodPainter extends CustomPainter {
     }
   }
 
+  // ============================================================
+  // HACKABLE: projectile visuals
+  // ============================================================
+  void _paintEnemyProjectiles(Canvas canvas, Size size) {
+    for (final projectile in enemyProjectiles) {
+      final screenX = worldXToScreen(projectile.position.dx, projectile.position.dy, size);
+      final screenY = enemyScreenY(projectile.position.dy, size);
+
+      final glow = Paint()
+        ..color = (projectile.isBossShot
+                ? Colors.orangeAccent
+                : Colors.redAccent)
+            .withValues(alpha: 0.22)
+        ..style = PaintingStyle.fill;
+
+      final core = Paint()
+        ..color = projectile.isBossShot
+            ? const Color(0xFFFFC36E)
+            : Colors.redAccent;
+
+      final drawRadius = projectile.isBossShot ? 10.0 : 7.0;
+
+      canvas.drawCircle(Offset(screenX, screenY), drawRadius * 1.9, glow);
+      canvas.drawCircle(Offset(screenX, screenY), drawRadius, core);
+    }
+  }
+
   void _paintTraces(Canvas canvas) {
     for (final trace in traces) {
       final p = Paint()
@@ -498,8 +535,55 @@ class RedwoodPainter extends CustomPainter {
     );
   }
 
+  void _paintBossHealthBar(Canvas canvas, Size size) {
+    if (bossMaxHealth <= 0 || bossHealth <= 0) return;
+
+    final bg = Paint()..color = Colors.black.withValues(alpha: 0.45);
+    final fg = Paint()..color = Colors.redAccent;
+    final frame = Paint()
+      ..color = GameConfig.accent.withValues(alpha: 0.55)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+
+    final rect = Rect.fromLTWH(size.width * 0.18, 24, size.width * 0.64, 14);
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, const Radius.circular(7)),
+      bg,
+    );
+
+    final fillWidth = rect.width * (bossHealth / bossMaxHealth);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(rect.left, rect.top, fillWidth, rect.height),
+        const Radius.circular(7),
+      ),
+      fg,
+    );
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, const Radius.circular(7)),
+      frame,
+    );
+
+    final textPainter = TextPainter(
+      text: const TextSpan(
+        text: 'BOSS',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    textPainter.paint(
+      canvas,
+      Offset(size.width / 2 - textPainter.width / 2, rect.top - 16),
+    );
+  }
+
   @override
   bool shouldRepaint(covariant RedwoodPainter oldDelegate) => true;
 }
-
-double _lerp(double a, double b, double t) => a + (b - a) * t;
