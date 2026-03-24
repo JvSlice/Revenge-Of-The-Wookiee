@@ -1,4 +1,3 @@
-
 enum GameState {
   menu,
   playing,
@@ -12,4 +11,13 @@ enum EnemyType {
   standard,
   heavy,
   boss,
+}
+
+// ============================================================
+// HACKABLE: difficulty options
+// ============================================================
+enum DifficultyMode {
+  easy,
+  medium,
+  hard,
 }
