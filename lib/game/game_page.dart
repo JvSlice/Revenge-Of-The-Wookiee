@@ -4,6 +4,7 @@ import 'package:flutter/scheduler.dart';
 
 import '../config/game_config.dart';
 import '../models/enemy.dart';
+import '../models/enemy_projectile.dart';
 import '../models/game_types.dart';
 import '../models/shot_trace.dart';
 import '../models/stick_state.dart';
@@ -30,11 +31,19 @@ class _GamePageState extends State<GamePage>
   double survivalTime = 0.0;
   double fireCooldownTimer = 0.0;
 
+  // ============================================================
+  // HACKABLE: player/world state
+  // playerX = side-step in corridor
+  // aimX = horizontal crosshair drift
+  // aimY = vertical crosshair drift
+  // ============================================================
   double playerX = 0.0;
   double aimX = 0.0;
+  double aimY = 0.0;
   double bobTime = 0.0;
 
   final List<Enemy> enemies = [];
+  final List<EnemyProjectile> enemyProjectiles = [];
   final List<ShotTrace> traces = [];
 
   final StickState moveStick = StickState();
@@ -94,8 +103,10 @@ class _GamePageState extends State<GamePage>
       fireCooldownTimer = 0.0;
       playerX = 0.0;
       aimX = 0.0;
+      aimY = 0.0;
       bobTime = 0.0;
       enemies.clear();
+      enemyProjectiles.clear();
       traces.clear();
       moveStick.stop();
       aimStick.stop();
@@ -156,6 +167,7 @@ class _GamePageState extends State<GamePage>
     _updateControls(dt);
     _updateWaveLogic(dt);
     _updateEnemies(dt);
+    _updateEnemyProjectiles(dt);
     _updateTraces(dt);
 
     if (health <= 0) {
@@ -163,29 +175,42 @@ class _GamePageState extends State<GamePage>
       return;
     }
 
-    if (currentWave > GameConfig.finalWave && enemies.isEmpty) {
+    if (currentWave > GameConfig.finalWave &&
+        enemies.isEmpty &&
+        enemyProjectiles.isEmpty) {
       state = GameState.won;
     }
   }
 
-  // HACKABLE: touch sensitivity and clamp live in GameConfig.
+  // ============================================================
+  // HACKABLE: thumbstick feel
+  // Left stick = movement
+  // Right stick = horizontal + vertical aiming
+  // ============================================================
   void _updateControls(double dt) {
     double moveInput = 0.0;
-    double aimInput = 0.0;
+    double aimInputX = 0.0;
+    double aimInputY = 0.0;
 
     if (moveStick.active) {
       moveInput = (moveStick.delta.dx / 55.0).clamp(-1.0, 1.0);
     }
 
     if (aimStick.active) {
-      aimInput = (aimStick.delta.dx / 55.0).clamp(-1.0, 1.0);
+      aimInputX = (aimStick.delta.dx / 55.0).clamp(-1.0, 1.0);
+      aimInputY = (aimStick.delta.dy / 55.0).clamp(-1.0, 1.0);
     }
 
     playerX += moveInput * GameConfig.moveSpeed * dt;
-    aimX += aimInput * GameConfig.aimSpeed * dt;
+    aimX += aimInputX * GameConfig.aimSpeed * dt;
+    aimY += aimInputY * GameConfig.aimVerticalSpeed * dt;
 
     playerX = playerX.clamp(-GameConfig.playerClamp, GameConfig.playerClamp);
     aimX = aimX.clamp(-GameConfig.aimClamp, GameConfig.aimClamp);
+    aimY = aimY.clamp(
+      GameConfig.aimVerticalUpClamp,
+      GameConfig.aimVerticalDownClamp,
+    );
 
     bobTime += dt * (1.0 + moveInput.abs() * 2.0);
   }
@@ -216,7 +241,7 @@ class _GamePageState extends State<GamePage>
     final waveFullySpawned =
         activeWave != null && waveSpawnIndex >= activeWave!.spawnQueue.length;
 
-    if (waveFullySpawned && enemies.isEmpty) {
+    if (waveFullySpawned && enemies.isEmpty && enemyProjectiles.isEmpty) {
       if (currentWave >= GameConfig.finalWave) {
         currentWave = GameConfig.finalWave + 1;
       } else {
@@ -246,7 +271,10 @@ class _GamePageState extends State<GamePage>
     }
   }
 
-  // HACKABLE: easiest place to tune level composition.
+  // ============================================================
+  // HACKABLE: wave compositions
+  // Easiest place to change the level progression.
+  // ============================================================
   WavePlan _buildWave(int waveNumber) {
     switch (waveNumber) {
       case 1:
@@ -396,7 +424,10 @@ class _GamePageState extends State<GamePage>
     }
   }
 
-  // HACKABLE: enemy speed, hp, size, weave by type live here.
+  // ============================================================
+  // HACKABLE: enemy stats by type
+  // This is the best place to balance speed, hp, size, and fire rate.
+  // ============================================================
   void _spawnEnemy(EnemyType type) {
     final distance = _rng.nextDouble() *
             (GameConfig.enemyStartDistanceMax -
@@ -410,6 +441,7 @@ class _GamePageState extends State<GamePage>
     double radiusScale;
     int hp;
     double weave;
+    double shootCooldown;
 
     switch (type) {
       case EnemyType.scout:
@@ -418,6 +450,7 @@ class _GamePageState extends State<GamePage>
         radiusScale = 0.82;
         hp = 1;
         weave = 1.5 + currentWave * 0.03;
+        shootCooldown = 999.0;
         break;
       case EnemyType.heavy:
         speed = GameConfig.enemyBaseSpeed + 0.10 + currentWave * 0.08;
@@ -425,6 +458,10 @@ class _GamePageState extends State<GamePage>
         radiusScale = 1.18;
         hp = 2 + (currentWave >= 8 ? 1 : 0);
         weave = 0.2;
+        shootCooldown = _randomRange(
+          GameConfig.heavyFireCooldownMin,
+          GameConfig.heavyFireCooldownMax,
+        );
         break;
       case EnemyType.boss:
         speed = GameConfig.enemyBaseSpeed + currentWave * 0.06;
@@ -433,6 +470,10 @@ class _GamePageState extends State<GamePage>
         hp = currentWave >= 10 ? 8 : currentWave >= 6 ? 6 : 5;
         weave = 0.12;
         x *= 0.45;
+        shootCooldown = _randomRange(
+          GameConfig.bossFireCooldownMin,
+          GameConfig.bossFireCooldownMax,
+        );
         break;
       case EnemyType.standard:
         speed = GameConfig.enemyBaseSpeed +
@@ -442,6 +483,10 @@ class _GamePageState extends State<GamePage>
         radiusScale = 1.0;
         hp = currentWave >= 7 ? 2 : 1;
         weave = 0.45 + currentWave * 0.01;
+        shootCooldown = _randomRange(
+          GameConfig.standardFireCooldownMin,
+          GameConfig.standardFireCooldownMax,
+        );
         break;
     }
 
@@ -456,6 +501,7 @@ class _GamePageState extends State<GamePage>
         health: hp,
         maxHealth: hp,
         weave: weave,
+        shootCooldown: shootCooldown,
       ),
     );
   }
@@ -484,6 +530,8 @@ class _GamePageState extends State<GamePage>
             0.9;
       }
 
+      _updateEnemyShooting(enemy, dt);
+
       if (enemy.distance <= 0.8) {
         health -= enemy.type == EnemyType.boss ? 2 : 1;
         dead.add(enemy);
@@ -493,6 +541,112 @@ class _GamePageState extends State<GamePage>
     enemies.removeWhere(dead.contains);
   }
 
+  // ============================================================
+  // HACKABLE: enemy projectile behavior
+  // Bosses fire 3-shot spreads.
+  // Standard/heavy enemies fire single shots.
+  // ============================================================
+  void _updateEnemyShooting(Enemy enemy, double dt) {
+    enemy.shootCooldown -= dt;
+    if (enemy.shootCooldown > 0) return;
+
+    final origin = enemy;
+
+    if (origin.type == EnemyType.boss) {
+      _spawnEnemyProjectile(origin, -0.22, true);
+      _spawnEnemyProjectile(origin, 0.0, true);
+      _spawnEnemyProjectile(origin, 0.22, true);
+      origin.shootCooldown = _randomRange(
+        GameConfig.bossFireCooldownMin,
+        GameConfig.bossFireCooldownMax,
+      );
+      return;
+    }
+
+    if (origin.type == EnemyType.standard) {
+      _spawnEnemyProjectile(origin, 0.0, false);
+      origin.shootCooldown = _randomRange(
+        GameConfig.standardFireCooldownMin,
+        GameConfig.standardFireCooldownMax,
+      );
+      return;
+    }
+
+    if (origin.type == EnemyType.heavy) {
+      _spawnEnemyProjectile(origin, 0.0, false);
+      origin.shootCooldown = _randomRange(
+        GameConfig.heavyFireCooldownMin,
+        GameConfig.heavyFireCooldownMax,
+      );
+      return;
+    }
+  }
+
+  void _spawnEnemyProjectile(
+    Enemy enemy,
+    double horizontalSpread,
+    bool isBossShot,
+  ) {
+    final startX = enemy.x - playerX;
+    final startY = enemy.distance;
+
+    final dx = (-startX) + horizontalSpread;
+    final dy = -startY;
+
+    final len = math.sqrt(dx * dx + dy * dy);
+    if (len == 0) return;
+
+    final speed = isBossShot
+        ? GameConfig.projectileBossSpeed
+        : GameConfig.projectileBaseSpeed;
+
+    final velocity = Offset(
+      (dx / len) * speed,
+      (dy / len) * speed,
+    );
+
+    enemyProjectiles.add(
+      EnemyProjectile(
+        position: Offset(startX, startY),
+        velocity: velocity,
+        radius: isBossShot ? 10.0 : 8.0,
+        life: 4.0,
+        isBossShot: isBossShot,
+      ),
+    );
+  }
+
+  void _updateEnemyProjectiles(double dt) {
+    final dead = <EnemyProjectile>[];
+
+    for (final projectile in enemyProjectiles) {
+      projectile.position = Offset(
+        projectile.position.dx + projectile.velocity.dx * dt,
+        projectile.position.dy + projectile.velocity.dy * dt,
+      );
+
+      projectile.life -= dt;
+      if (projectile.life <= 0) {
+        dead.add(projectile);
+        continue;
+      }
+
+      final playerHitX = playerX;
+      final playerHitY = 0.9;
+
+      final dx = projectile.position.dx - playerHitX;
+      final dy = projectile.position.dy - playerHitY;
+      final distance = math.sqrt(dx * dx + dy * dy);
+
+      if (distance <= (GameConfig.projectileHitRadius / 100.0)) {
+        health -= projectile.isBossShot ? 2 : 1;
+        dead.add(projectile);
+      }
+    }
+
+    enemyProjectiles.removeWhere(dead.contains);
+  }
+
   void _updateTraces(double dt) {
     for (final trace in traces) {
       trace.life -= dt;
@@ -500,7 +654,9 @@ class _GamePageState extends State<GamePage>
     traces.removeWhere((t) => t.life <= 0);
   }
 
-  // HACKABLE: hit scoring and damage rules live here.
+  // ============================================================
+  // HACKABLE: hit test and scoring rules
+  // ============================================================
   void _fire(Size size) {
     if (state != GameState.playing) return;
     if (fireCooldownTimer > 0) return;
@@ -637,13 +793,19 @@ class _GamePageState extends State<GamePage>
 
   Offset _crosshairScreenPosition(Size size) {
     return Offset(
-      size.width / 2 + aimX * 36,
-      size.height * GameConfig.crosshairY,
+      size.width / 2 + aimX * GameConfig.crosshairHorizontalScale,
+      size.height * GameConfig.crosshairBaseY +
+          aimY * GameConfig.crosshairVerticalScale,
     );
   }
 
+  double _randomRange(double min, double max) {
+    return min + _rng.nextDouble() * (max - min);
+  }
+
   Rect _calcFireButtonRect(Size size) {
-    final double buttonSize = math.min(size.width * 0.16, 92.0);
+    final double buttonSize =
+        math.min(size.width * GameConfig.fireButtonWidthFactor, GameConfig.fireButtonMaxSize);
     return Rect.fromLTWH(
       size.width - buttonSize - 18.0,
       size.height - buttonSize - 90.0,
@@ -659,6 +821,24 @@ class _GamePageState extends State<GamePage>
       48.0,
       48.0,
     );
+  }
+
+  int get _currentBossHealth {
+    for (final enemy in enemies) {
+      if (enemy.type == EnemyType.boss && enemy.alive) {
+        return enemy.health;
+      }
+    }
+    return 0;
+  }
+
+  int get _currentBossMaxHealth {
+    for (final enemy in enemies) {
+      if (enemy.type == EnemyType.boss && enemy.alive) {
+        return enemy.maxHealth;
+      }
+    }
+    return 0;
   }
 
   @override
@@ -682,12 +862,15 @@ class _GamePageState extends State<GamePage>
                   painter: RedwoodPainter(
                     size: size,
                     enemies: enemies,
+                    enemyProjectiles: enemyProjectiles,
                     traces: traces,
                     playerX: playerX,
                     bobTime: bobTime,
                     state: state,
                     currentWave: currentWave,
                     firePressed: firePressed,
+                    bossHealth: _currentBossHealth,
+                    bossMaxHealth: _currentBossMaxHealth,
                     worldXToScreen: _worldXToScreen,
                     enemyScreenY: _enemyScreenY,
                     enemyRadius: _enemyRadius,
@@ -725,7 +908,7 @@ class _GamePageState extends State<GamePage>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Wookies Revenge',
+                  'Wookiee revenge',
                   style: TextStyle(
                     color: GameConfig.accent,
                     fontSize: 22,
@@ -944,7 +1127,7 @@ class _GamePageState extends State<GamePage>
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'Wookies Revenge',
+                'Wookiee revenge',
                 style: TextStyle(
                   color: GameConfig.accent,
                   fontSize: 30,
@@ -954,12 +1137,12 @@ class _GamePageState extends State<GamePage>
               ),
               const SizedBox(height: 14),
               const Text(
-                'Retro forest corridor shooter.\nNow with 10 waves and bosses.',
+                'Retro forest corridor shooter.\nNow with 10 waves, bosses, and enemy projectiles.',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 18),
               const Text(
-                'Left stick: move\nRight stick: aim\nFire button: shoot\nPause button: top right',
+                'Left stick: move\nRight stick: aim up/down + left/right\nFire button: shoot\nPause button: top right',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 22),
