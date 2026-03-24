@@ -24,6 +24,12 @@ class _GamePageState extends State<GamePage>
   Duration _lastTick = Duration.zero;
   final math.Random _rng = math.Random();
 
+  // ============================================================
+  // HACKABLE: menu / build label
+  // Change this when you want a visible version number on launch.
+  // ============================================================
+  static const String appVersion = 'v0.4.0';
+
   GameState state = GameState.menu;
 
   int score = 0;
@@ -273,7 +279,7 @@ class _GamePageState extends State<GamePage>
 
   // ============================================================
   // HACKABLE: wave compositions
-  // Easiest place to change the level progression.
+  // Easiest place to change level progression.
   // ============================================================
   WavePlan _buildWave(int waveNumber) {
     switch (waveNumber) {
@@ -426,7 +432,7 @@ class _GamePageState extends State<GamePage>
 
   // ============================================================
   // HACKABLE: enemy stats by type
-  // This is the best place to balance speed, hp, size, and fire rate.
+  // Best place to balance speed, hp, size, and fire rate.
   // ============================================================
   void _spawnEnemy(EnemyType type) {
     final distance = _rng.nextDouble() *
@@ -550,31 +556,29 @@ class _GamePageState extends State<GamePage>
     enemy.shootCooldown -= dt;
     if (enemy.shootCooldown > 0) return;
 
-    final origin = enemy;
-
-    if (origin.type == EnemyType.boss) {
-      _spawnEnemyProjectile(origin, -0.22, true);
-      _spawnEnemyProjectile(origin, 0.0, true);
-      _spawnEnemyProjectile(origin, 0.22, true);
-      origin.shootCooldown = _randomRange(
+    if (enemy.type == EnemyType.boss) {
+      _spawnEnemyProjectile(enemy, -0.22, true);
+      _spawnEnemyProjectile(enemy, 0.0, true);
+      _spawnEnemyProjectile(enemy, 0.22, true);
+      enemy.shootCooldown = _randomRange(
         GameConfig.bossFireCooldownMin,
         GameConfig.bossFireCooldownMax,
       );
       return;
     }
 
-    if (origin.type == EnemyType.standard) {
-      _spawnEnemyProjectile(origin, 0.0, false);
-      origin.shootCooldown = _randomRange(
+    if (enemy.type == EnemyType.standard) {
+      _spawnEnemyProjectile(enemy, 0.0, false);
+      enemy.shootCooldown = _randomRange(
         GameConfig.standardFireCooldownMin,
         GameConfig.standardFireCooldownMax,
       );
       return;
     }
 
-    if (origin.type == EnemyType.heavy) {
-      _spawnEnemyProjectile(origin, 0.0, false);
-      origin.shootCooldown = _randomRange(
+    if (enemy.type == EnemyType.heavy) {
+      _spawnEnemyProjectile(enemy, 0.0, false);
+      enemy.shootCooldown = _randomRange(
         GameConfig.heavyFireCooldownMin,
         GameConfig.heavyFireCooldownMax,
       );
@@ -582,6 +586,12 @@ class _GamePageState extends State<GamePage>
     }
   }
 
+  // ============================================================
+  // HACKABLE: projectile aim
+  // IMPORTANT:
+  // These shots lock onto the player's position ONCE when fired.
+  // They do NOT track after spawning.
+  // ============================================================
   void _spawnEnemyProjectile(
     Enemy enemy,
     double horizontalSpread,
@@ -590,8 +600,11 @@ class _GamePageState extends State<GamePage>
     final startX = enemy.x - playerX;
     final startY = enemy.distance;
 
-    final dx = (-startX) + horizontalSpread;
-    final dy = -startY;
+    final targetX = playerX;
+    const targetY = 0.9;
+
+    final dx = (targetX - startX) + horizontalSpread;
+    final dy = targetY - startY;
 
     final len = math.sqrt(dx * dx + dy * dy);
     if (len == 0) return;
@@ -632,7 +645,7 @@ class _GamePageState extends State<GamePage>
       }
 
       final playerHitX = playerX;
-      final playerHitY = 0.9;
+      const playerHitY = 0.9;
 
       final dx = projectile.position.dx - playerHitX;
       final dy = projectile.position.dy - playerHitY;
@@ -804,8 +817,10 @@ class _GamePageState extends State<GamePage>
   }
 
   Rect _calcFireButtonRect(Size size) {
-    final double buttonSize =
-        math.min(size.width * GameConfig.fireButtonWidthFactor, GameConfig.fireButtonMaxSize);
+    final double buttonSize = math.min(
+      size.width * GameConfig.fireButtonWidthFactor,
+      GameConfig.fireButtonMaxSize,
+    );
     return Rect.fromLTWH(
       size.width - buttonSize - 18.0,
       size.height - buttonSize - 90.0,
@@ -1154,6 +1169,15 @@ class _GamePageState extends State<GamePage>
                     padding: EdgeInsets.symmetric(vertical: 12),
                     child: Text('START GAME'),
                   ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                appVersion,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.65),
+                  fontSize: 12,
+                  letterSpacing: 1.0,
                 ),
               ),
             ],
