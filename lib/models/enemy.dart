@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'game_types.dart';
 
@@ -13,6 +12,7 @@ class Enemy {
     required this.health,
     required this.maxHealth,
     this.weave = 0.0,
+    this.shootCooldown = 2.0,
   });
 
   double x;
@@ -24,6 +24,9 @@ class Enemy {
   int health;
   int maxHealth;
   double weave;
+
+  // HACKABLE: per-enemy projectile cooldown
+  double shootCooldown;
 
   bool alive = true;
   double flash = 0.0;
