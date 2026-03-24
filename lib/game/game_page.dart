@@ -25,24 +25,23 @@ class _GamePageState extends State<GamePage>
   final math.Random _rng = math.Random();
 
   // ============================================================
-  // HACKABLE: menu / build label
-  // Change this when you want a visible version number on launch.
+  // HACKABLE: visible version label on launch screen
   // ============================================================
-  static const String appVersion = 'v0.4.0';
+  static const String appVersion = 'v0.5.0';
 
   GameState state = GameState.menu;
+
+  // ============================================================
+  // HACKABLE: selected difficulty
+  // Default starts on medium
+  // ============================================================
+  DifficultyMode selectedDifficulty = DifficultyMode.medium;
 
   int score = 0;
   int health = GameConfig.maxHealth;
   double survivalTime = 0.0;
   double fireCooldownTimer = 0.0;
 
-  // ============================================================
-  // HACKABLE: player/world state
-  // playerX = side-step in corridor
-  // aimX = horizontal crosshair drift
-  // aimY = vertical crosshair drift
-  // ============================================================
   double playerX = 0.0;
   double aimX = 0.0;
   double aimY = 0.0;
@@ -100,11 +99,32 @@ class _GamePageState extends State<GamePage>
     }
   }
 
+  // ============================================================
+  // HACKABLE: starting health by difficulty
+  // Easy = 5
+  // Medium = current maxHealth
+  // Hard = 1
+  // ============================================================
+  int _startingHealthForDifficulty() {
+    switch (selectedDifficulty) {
+      case DifficultyMode.easy:
+        return 5;
+      case DifficultyMode.hard:
+        return 1;
+      case DifficultyMode.medium:
+        return GameConfig.maxHealth;
+    }
+  }
+
+  bool get _enemyProjectilesEnabled => selectedDifficulty != DifficultyMode.easy;
+
+  bool get _hardModeBossBonus => selectedDifficulty == DifficultyMode.hard;
+
   void _startGame() {
     setState(() {
       state = GameState.playing;
       score = 0;
-      health = GameConfig.maxHealth;
+      health = _startingHealthForDifficulty();
       survivalTime = 0.0;
       fireCooldownTimer = 0.0;
       playerX = 0.0;
@@ -173,7 +193,13 @@ class _GamePageState extends State<GamePage>
     _updateControls(dt);
     _updateWaveLogic(dt);
     _updateEnemies(dt);
-    _updateEnemyProjectiles(dt);
+
+    if (_enemyProjectilesEnabled) {
+      _updateEnemyProjectiles(dt);
+    } else {
+      enemyProjectiles.clear();
+    }
+
     _updateTraces(dt);
 
     if (health <= 0) {
@@ -433,6 +459,8 @@ class _GamePageState extends State<GamePage>
   // ============================================================
   // HACKABLE: enemy stats by type
   // Best place to balance speed, hp, size, and fire rate.
+  // Hard mode boss bonus:
+  // boss health += currentWave
   // ============================================================
   void _spawnEnemy(EnemyType type) {
     final distance = _rng.nextDouble() *
@@ -474,6 +502,11 @@ class _GamePageState extends State<GamePage>
         tint = const Color(0xFFFFC36E);
         radiusScale = currentWave >= 10 ? 2.0 : 1.75;
         hp = currentWave >= 10 ? 8 : currentWave >= 6 ? 6 : 5;
+
+        if (_hardModeBossBonus) {
+          hp += currentWave;
+        }
+
         weave = 0.12;
         x *= 0.45;
         shootCooldown = _randomRange(
@@ -536,7 +569,9 @@ class _GamePageState extends State<GamePage>
             0.9;
       }
 
-      _updateEnemyShooting(enemy, dt);
+      if (_enemyProjectilesEnabled) {
+        _updateEnemyShooting(enemy, dt);
+      }
 
       if (enemy.distance <= 0.8) {
         health -= enemy.type == EnemyType.boss ? 2 : 1;
@@ -549,8 +584,8 @@ class _GamePageState extends State<GamePage>
 
   // ============================================================
   // HACKABLE: enemy projectile behavior
+  // Easy mode disables all enemy projectiles.
   // Bosses fire 3-shot spreads.
-  // Standard/heavy enemies fire single shots.
   // ============================================================
   void _updateEnemyShooting(Enemy enemy, double dt) {
     enemy.shootCooldown -= dt;
@@ -588,7 +623,6 @@ class _GamePageState extends State<GamePage>
 
   // ============================================================
   // HACKABLE: projectile aim
-  // IMPORTANT:
   // These shots lock onto the player's position ONCE when fired.
   // They do NOT track after spawning.
   // ============================================================
@@ -856,6 +890,17 @@ class _GamePageState extends State<GamePage>
     return 0;
   }
 
+  String get _difficultyLabel {
+    switch (selectedDifficulty) {
+      case DifficultyMode.easy:
+        return 'Easy';
+      case DifficultyMode.medium:
+        return 'Medium';
+      case DifficultyMode.hard:
+        return 'Hard';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -939,6 +984,7 @@ class _GamePageState extends State<GamePage>
                     _pill('Wave: $currentWave'),
                     _pill('Score: $score'),
                     _pill('Health: $health'),
+                    _pill(_difficultyLabel),
                   ],
                 ),
               ],
@@ -1124,12 +1170,66 @@ class _GamePageState extends State<GamePage>
     );
   }
 
+  Widget _buildDifficultyButton({
+    required DifficultyMode mode,
+    required String title,
+    required String subtitle,
+  }) {
+    final isSelected = selectedDifficulty == mode;
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          selectedDifficulty = mode;
+        });
+      },
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? GameConfig.accent.withValues(alpha: 0.14)
+              : Colors.black.withValues(alpha: 0.20),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected
+                ? GameConfig.accent.withValues(alpha: 0.95)
+                : Colors.white.withValues(alpha: 0.16),
+            width: isSelected ? 2.0 : 1.0,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: TextStyle(
+                color: isSelected ? GameConfig.accent : Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.78),
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildMenuOverlay() {
     return Container(
       color: Colors.black.withValues(alpha: 0.72),
       child: Center(
         child: Container(
-          width: 340,
+          width: 360,
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
             color: const Color(0xFF11161B),
@@ -1160,7 +1260,28 @@ class _GamePageState extends State<GamePage>
                 'Left stick: move\nRight stick: aim up/down + left/right\nFire button: shoot\nPause button: top right',
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 22),
+              const SizedBox(height: 20),
+
+              // ========================================================
+              // HACKABLE: difficulty selection UI
+              // ========================================================
+              _buildDifficultyButton(
+                mode: DifficultyMode.easy,
+                title: 'Easy',
+                subtitle: '5 health • no enemy projectiles',
+              ),
+              _buildDifficultyButton(
+                mode: DifficultyMode.medium,
+                title: 'Medium',
+                subtitle: 'Current default balance',
+              ),
+              _buildDifficultyButton(
+                mode: DifficultyMode.hard,
+                title: 'Hard',
+                subtitle: '1 health • enemy projectiles • bosses gain +wave health',
+              ),
+
+              const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -1288,6 +1409,8 @@ class _GamePageState extends State<GamePage>
               ),
               const SizedBox(height: 6),
               Text('Wave Reached: $currentWave'),
+              const SizedBox(height: 6),
+              Text('Mode: $_difficultyLabel'),
               const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,
