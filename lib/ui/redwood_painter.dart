@@ -354,10 +354,17 @@ class RedwoodPainter extends CustomPainter {
 
   // ============================================================
   // HACKABLE: projectile visuals
+  // IMPORTANT:
+  // projectile.position.dx is WORLD SPACE, so render uses:
+  // projectile.position.dx - playerX
   // ============================================================
   void _paintEnemyProjectiles(Canvas canvas, Size size) {
     for (final projectile in enemyProjectiles) {
-      final screenX = worldXToScreen(projectile.position.dx, projectile.position.dy, size);
+      final screenX = worldXToScreen(
+        projectile.position.dx - playerX,
+        projectile.position.dy,
+        size,
+      );
       final screenY = enemyScreenY(projectile.position.dy, size);
 
       final glow = Paint()
