@@ -204,38 +204,69 @@ class _GamePageState extends State<GamePage>
         enemyProjectiles.isEmpty) {
       state = GameState.won;
     }
-  }
+  }`
 
   // ============================================================
-  // HACKABLE: thumbstick feel
-  // ============================================================
-  void _updateControls(double dt) {
-    double moveInput = 0.0;
-    double aimInputX = 0.0;
-    double aimInputY = 0.0;
+// HACKABLE: thumbstick feel
+// Left stick = movement
+// Right stick = horizontal + vertical aiming
+//
+// This version makes the sticks feel less "sticky" by letting
+// the stick center drift with your thumb once you push far enough.
+// ============================================================
+void _updateControls(double dt) {
+  double moveInput = 0.0;
+  double aimInputX = 0.0;
+  double aimInputY = 0.0;
 
-    if (moveStick.active) {
-      moveInput = (moveStick.delta.dx / 55.0).clamp(-1.0, 1.0);
+  const double stickRange = 55.0;
+  const double recenterStrength = 0.22;
+
+  if (moveStick.active) {
+    final delta = moveStick.current - moveStick.center;
+    final distance = delta.distance;
+
+    if (distance > stickRange && distance > 0) {
+      final overflow = distance - stickRange;
+      final direction = delta / distance;
+
+      moveStick.center = moveStick.center + direction * overflow * recenterStrength;
     }
 
-    if (aimStick.active) {
-      aimInputX = (aimStick.delta.dx / 55.0).clamp(-1.0, 1.0);
-      aimInputY = (aimStick.delta.dy / 55.0).clamp(-1.0, 1.0);
-    }
-
-    playerX += moveInput * GameConfig.moveSpeed * dt;
-    aimX += aimInputX * GameConfig.aimSpeed * dt;
-    aimY += aimInputY * GameConfig.aimVerticalSpeed * dt;
-
-    playerX = playerX.clamp(-GameConfig.playerClamp, GameConfig.playerClamp);
-    aimX = aimX.clamp(-GameConfig.aimClamp, GameConfig.aimClamp);
-    aimY = aimY.clamp(
-      GameConfig.aimVerticalUpClamp,
-      GameConfig.aimVerticalDownClamp,
-    );
-
-    bobTime += dt * (1.0 + moveInput.abs() * 2.0);
+    moveInput = ((moveStick.current.dx - moveStick.center.dx) / stickRange)
+        .clamp(-1.0, 1.0);
   }
+
+  if (aimStick.active) {
+    final delta = aimStick.current - aimStick.center;
+    final distance = delta.distance;
+
+    if (distance > stickRange && distance > 0) {
+      final overflow = distance - stickRange;
+      final direction = delta / distance;
+
+      aimStick.center = aimStick.center + direction * overflow * recenterStrength;
+    }
+
+    aimInputX = ((aimStick.current.dx - aimStick.center.dx) / stickRange)
+        .clamp(-1.0, 1.0);
+    aimInputY = ((aimStick.current.dy - aimStick.center.dy) / stickRange)
+        .clamp(-1.0, 1.0);
+  }
+
+  playerX += moveInput * GameConfig.moveSpeed * dt;
+  aimX += aimInputX * GameConfig.aimSpeed * dt;
+  aimY += aimInputY * GameConfig.aimVerticalSpeed * dt;
+
+  playerX = playerX.clamp(-GameConfig.playerClamp, GameConfig.playerClamp);
+  aimX = aimX.clamp(-GameConfig.aimClamp, GameConfig.aimClamp);
+  aimY = aimY.clamp(
+    GameConfig.aimVerticalUpClamp,
+    GameConfig.aimVerticalDownClamp,
+  );
+
+  bobTime += dt * (1.0 + moveInput.abs() * 2.0);
+}
 
   void _updateWaveLogic(double dt) {
     if (betweenWaves) {
@@ -670,7 +701,7 @@ class _GamePageState extends State<GamePage>
       final dx = projectile.position.dx - playerHitX;
       final dy = projectile.position.dy - playerHitY;
       final distance = math.sqrt(dx * dx + dy * dy);
-
+`
       if (distance <= (GameConfig.projectileHitRadius / 100.0)) {
         health -= projectile.isBossShot ? 2 : 1;
         dead.add(projectile);
@@ -833,18 +864,18 @@ class _GamePageState extends State<GamePage>
     return min + _rng.nextDouble() * (max - min);
   }
 
-  Rect _calcFireButtonRect(Size size) {
-    final double buttonSize = math.min(
-      size.width * GameConfig.fireButtonWidthFactor,
-      GameConfig.fireButtonMaxSize,
-    );
+ 
+
+  Rect _calcPauseButtonRect(Size size) {
     return Rect.fromLTWH(
-      size.width - buttonSize - 18.0,
-      size.height - buttonSize - 90.0,
-      buttonSize,
-      buttonSize,
+      size.width - 66.0,
+      18.0,
+      48.0,
+      48.0,
     );
   }
+
+  i
 
   Rect _calcPauseButtonRect(Size size) {
     return Rect.fromLTWH(
@@ -937,104 +968,104 @@ class _GamePageState extends State<GamePage>
     );
   }
 
-  Widget _buildHud(Size size) {
-    final leftCenter = Offset(85, size.height - 95);
-    final rightCenter = Offset(size.width - 105, size.height - 210);
 
-    return SafeArea(
-      child: Stack(
-        children: [
-          Positioned(
-            left: 14,
-            top: 12,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Wookiee revenge',
-                  style: TextStyle(
-                    color: GameConfig.accent,
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.4,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _pill('Wave: $currentWave'),
-                    _pill('Score: $score'),
-                    _pill('Health: $health'),
-                    _pill(_difficultyLabel),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Positioned(
-            right: 18,
-            top: 18,
-            child: Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.30),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: GameConfig.accent.withValues(alpha: 0.55),
-                ),
-              ),
-              child: Icon(
-                Icons.pause,
-                color: GameConfig.accent,
-              ),
-            ),
-          ),
-          _buildStickVisual(
-            center: moveStick.active ? moveStick.center : leftCenter,
-            knob: moveStick.active ? moveStick.current : leftCenter,
-            label: 'MOVE',
-            active: moveStick.active,
-          ),
-          _buildStickVisual(
-            center: aimStick.active ? aimStick.center : rightCenter,
-            knob: aimStick.active ? aimStick.current : rightCenter,
-            label: 'AIM',
-            active: aimStick.active,
-          ),
-          Positioned(
-            right: 18,
-            bottom: 90,
-            child: Container(
-              width: fireButtonRect.width,
-              height: fireButtonRect.height,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: firePressed
-                    ? Colors.redAccent.withValues(alpha: 0.45)
-                    : Colors.redAccent.withValues(alpha: 0.20),
-                border: Border.all(
-                  color: Colors.redAccent.withValues(alpha: 0.95),
-                  width: 2.5,
-                ),
-              ),
-              child: const Center(
-                child: Text(
-                  'FIRE',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.1,
+  Widget _buildStickVisual({
+    required Offset center,
+    required Offset knob,
+    required String label,
+    required bool active,
+  }) {
+    final clamped = _clampKnob(center, knob, 34);
+
+    return Positioned(
+      left: center.dx - 45,
+      top: center.dy - 45,
+      child: IgnorePointer(
+        child: SizedBox(
+          width: 90,
+          height: 90,
+          child: Stack(
+            children: [
+              Container(
+                width: 90,
+                height: 90,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.black.withValues(alpha: 0.18),
+                  border: Border.all(
+                    color: GameConfig.accent.withValues(
+                      alpha: active ? 0.9 : 0.35,
+                    ),
+                    width: 2,
                   ),
                 ),
               ),
-            ),
+              Positioned(
+                left: clamped.dx - center.dx + 27,
+                top: clamped.dy - center.dy + 27,
+                child: Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: GameConfig.accent.withValues(
+                      alpha: active ? 0.55 : 0.22,
+                    ),
+                    border: Border.all(
+                      color: GameConfig.accent.withValues(alpha: 0.95),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned.fill(
+                child: Center(
+                  child: Transform.translate(
+                    offset: const Offset(0, 58),
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.white.withValues(alpha: 0.82),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
+
+  Widget _pill(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.32),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: GameConfig.accent.withValues(alpha: 0.40),
+        ),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+
+  Widget _buildBanner() {
+    return SafeArea(
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: Padding(
+          padding: const EdgeInsets.only(top: 84),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+   
+ 
 
   Widget _buildStickVisual({
     required Offset center,
