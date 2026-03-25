@@ -27,13 +27,12 @@ class _GamePageState extends State<GamePage>
   // ============================================================
   // HACKABLE: visible version label on launch screen
   // ============================================================
-  static const String appVersion = 'v0.5.0';
+  static const String appVersion = 'v0.5.1';
 
   GameState state = GameState.menu;
 
   // ============================================================
   // HACKABLE: selected difficulty
-  // Default starts on medium
   // ============================================================
   DifficultyMode selectedDifficulty = DifficultyMode.medium;
 
@@ -99,12 +98,6 @@ class _GamePageState extends State<GamePage>
     }
   }
 
-  // ============================================================
-  // HACKABLE: starting health by difficulty
-  // Easy = 5
-  // Medium = current maxHealth
-  // Hard = 1
-  // ============================================================
   int _startingHealthForDifficulty() {
     switch (selectedDifficulty) {
       case DifficultyMode.easy:
@@ -117,7 +110,6 @@ class _GamePageState extends State<GamePage>
   }
 
   bool get _enemyProjectilesEnabled => selectedDifficulty != DifficultyMode.easy;
-
   bool get _hardModeBossBonus => selectedDifficulty == DifficultyMode.hard;
 
   void _startGame() {
@@ -216,8 +208,6 @@ class _GamePageState extends State<GamePage>
 
   // ============================================================
   // HACKABLE: thumbstick feel
-  // Left stick = movement
-  // Right stick = horizontal + vertical aiming
   // ============================================================
   void _updateControls(double dt) {
     double moveInput = 0.0;
@@ -305,7 +295,6 @@ class _GamePageState extends State<GamePage>
 
   // ============================================================
   // HACKABLE: wave compositions
-  // Easiest place to change level progression.
   // ============================================================
   WavePlan _buildWave(int waveNumber) {
     switch (waveNumber) {
@@ -458,9 +447,6 @@ class _GamePageState extends State<GamePage>
 
   // ============================================================
   // HACKABLE: enemy stats by type
-  // Best place to balance speed, hp, size, and fire rate.
-  // Hard mode boss bonus:
-  // boss health += currentWave
   // ============================================================
   void _spawnEnemy(EnemyType type) {
     final distance = _rng.nextDouble() *
@@ -584,8 +570,9 @@ class _GamePageState extends State<GamePage>
 
   // ============================================================
   // HACKABLE: enemy projectile behavior
-  // Easy mode disables all enemy projectiles.
-  // Bosses fire 3-shot spreads.
+  // IMPORTANT:
+  // Projectile position is stored in WORLD SPACE.
+  // That means shots do not follow the player after firing.
   // ============================================================
   void _updateEnemyShooting(Enemy enemy, double dt) {
     enemy.shootCooldown -= dt;
@@ -621,19 +608,16 @@ class _GamePageState extends State<GamePage>
     }
   }
 
-  // ============================================================
-  // HACKABLE: projectile aim
-  // These shots lock onto the player's position ONCE when fired.
-  // They do NOT track after spawning.
-  // ============================================================
   void _spawnEnemyProjectile(
     Enemy enemy,
     double horizontalSpread,
     bool isBossShot,
   ) {
-    final startX = enemy.x - playerX;
+    // WORLD-SPACE starting position
+    final startX = enemy.x;
     final startY = enemy.distance;
 
+    // Lock onto the player's current lane ONCE.
     final targetX = playerX;
     const targetY = 0.9;
 
@@ -667,6 +651,7 @@ class _GamePageState extends State<GamePage>
     final dead = <EnemyProjectile>[];
 
     for (final projectile in enemyProjectiles) {
+      // Move only by locked velocity.
       projectile.position = Offset(
         projectile.position.dx + projectile.velocity.dx * dt,
         projectile.position.dy + projectile.velocity.dy * dt,
@@ -678,6 +663,7 @@ class _GamePageState extends State<GamePage>
         continue;
       }
 
+      // Player hit check in WORLD SPACE
       final playerHitX = playerX;
       const playerHitY = 0.9;
 
@@ -701,9 +687,6 @@ class _GamePageState extends State<GamePage>
     traces.removeWhere((t) => t.life <= 0);
   }
 
-  // ============================================================
-  // HACKABLE: hit test and scoring rules
-  // ============================================================
   void _fire(Size size) {
     if (state != GameState.playing) return;
     if (fireCooldownTimer > 0) return;
@@ -1261,10 +1244,6 @@ class _GamePageState extends State<GamePage>
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 20),
-
-              // ========================================================
-              // HACKABLE: difficulty selection UI
-              // ========================================================
               _buildDifficultyButton(
                 mode: DifficultyMode.easy,
                 title: 'Easy',
@@ -1280,7 +1259,6 @@ class _GamePageState extends State<GamePage>
                 title: 'Hard',
                 subtitle: '1 health • enemy projectiles • bosses gain +wave health',
               ),
-
               const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
