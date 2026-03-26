@@ -27,7 +27,7 @@ class _GamePageState extends State<GamePage>
   // ============================================================
   // HACKABLE: visible version label on launch screen
   // ============================================================
-  static const String appVersion = 'v0.5.3';
+  static const String appVersion = 'v0.5.4';
 
   GameState state = GameState.menu;
 
@@ -870,6 +870,7 @@ class _GamePageState extends State<GamePage>
 
   Rect _calcFireButtonRect(Size size) {
     final bool isTablet = size.shortestSide >= 600;
+    final bool isLandScape = size.width > size.height
 
     final double buttonSize = math.min(
       size.width * (isTablet ? 0.16 : GameConfig.fireButtonWidthFactor),
@@ -877,8 +878,8 @@ class _GamePageState extends State<GamePage>
     );
 
     return Rect.fromLTWH(
-      size.width - buttonSize - (isTablet ? 14.0 : 18.0),
-      size.height - buttonSize - (isTablet ? 155.0 : 110.0),
+      size.width - buttonSize - (isLandScape ? 10.0 : (isTablet ? 14.0 : 18.0)),
+      size.height - buttonSize - (isLandScape ? 85.0 : (isTablet ? 155.0 : 110.0)),
       buttonSize,
       buttonSize,
     );
@@ -977,6 +978,7 @@ class _GamePageState extends State<GamePage>
 
   Widget _buildHud(Size size) {
     final bool isTablet = size.shortestSide >= 600;
+    fianl bool is isLandScape =size.width > size.height
     final double hudScale = isTablet ? 1.18 : 1.0;
 
     // ============================================================
@@ -985,13 +987,22 @@ class _GamePageState extends State<GamePage>
     // ============================================================
     final leftCenter = Offset(
       85 * hudScale,
+      isLandScape ? 95 * hudScale : 85 * hudScale
       size.height - (isTablet ? 120 : 95),
     );
 
     final rightCenter = Offset(
-      size.width - (isTablet ? 165 : 140),
-      size.height - (isTablet ? 145 : 120),
+      size.width - (isTablet ? 230 : 210),
+      size.height - (isTablet ? 165 : 140),
     );
+    final double fireBottom = isLandScape
+    ? (isTablet ? 90 : 75)
+    : (isTablet ? 135 : 110);
+
+    final double fireRight = isLandScape
+    ? (isTablet ? 28 : 22)
+    : (isTablet ? 20 : 18);
+
 
     return SafeArea(
       child: Stack(
@@ -1059,8 +1070,8 @@ class _GamePageState extends State<GamePage>
             sizeMultiplier: hudScale,
           ),
           Positioned(
-            right: isTablet ? 20 : 18,
-            bottom: isTablet ? 135 : 110,
+            right: fireRight,
+            bottom: fireBottom,
             child: Container(
               width: fireButtonRect.width,
               height: fireButtonRect.height,
