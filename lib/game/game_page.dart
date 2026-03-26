@@ -27,7 +27,7 @@ class _GamePageState extends State<GamePage>
   // ============================================================
   // HACKABLE: visible version label on launch screen
   // ============================================================
-  static const String appVersion = 'v0.5.1';
+  static const String appVersion = 'v0.5.2';
 
   GameState state = GameState.menu;
 
@@ -41,6 +41,9 @@ class _GamePageState extends State<GamePage>
   double survivalTime = 0.0;
   double fireCooldownTimer = 0.0;
 
+  // ============================================================
+  // HACKABLE: player/world state
+  // ============================================================
   double playerX = 0.0;
   double aimX = 0.0;
   double aimY = 0.0;
@@ -98,6 +101,12 @@ class _GamePageState extends State<GamePage>
     }
   }
 
+  // ============================================================
+  // HACKABLE: starting health by difficulty
+  // Easy = 5
+  // Medium = current config maxHealth
+  // Hard = 1
+  // ============================================================
   int _startingHealthForDifficulty() {
     switch (selectedDifficulty) {
       case DifficultyMode.easy:
@@ -204,69 +213,66 @@ class _GamePageState extends State<GamePage>
         enemyProjectiles.isEmpty) {
       state = GameState.won;
     }
-  }`
+  }
 
   // ============================================================
-// HACKABLE: thumbstick feel
-// Left stick = movement
-// Right stick = horizontal + vertical aiming
-//
-// This version makes the sticks feel less "sticky" by letting
-// the stick center drift with your thumb once you push far enough.
-// ============================================================
-void _updateControls(double dt) {
-  double moveInput = 0.0;
-  double aimInputX = 0.0;
-  double aimInputY = 0.0;
+  // HACKABLE: thumbstick feel
+  // This version makes the sticks less "sticky" by letting the
+  // center drift toward the thumb when the thumb pushes far out.
+  // ============================================================
+  void _updateControls(double dt) {
+    double moveInput = 0.0;
+    double aimInputX = 0.0;
+    double aimInputY = 0.0;
 
-  const double stickRange = 55.0;
-  const double recenterStrength = 0.22;
+    const double stickRange = 55.0;
+    const double recenterStrength = 0.22;
 
-  if (moveStick.active) {
-    final delta = moveStick.current - moveStick.center;
-    final distance = delta.distance;
+    if (moveStick.active) {
+      final delta = moveStick.current - moveStick.center;
+      final distance = delta.distance;
 
-    if (distance > stickRange && distance > 0) {
-      final overflow = distance - stickRange;
-      final direction = delta / distance;
+      if (distance > stickRange && distance > 0) {
+        final overflow = distance - stickRange;
+        final direction = delta / distance;
+        moveStick.center =
+            moveStick.center + direction * overflow * recenterStrength;
+      }
 
-      moveStick.center = moveStick.center + direction * overflow * recenterStrength;
+      moveInput = ((moveStick.current.dx - moveStick.center.dx) / stickRange)
+          .clamp(-1.0, 1.0);
     }
 
-    moveInput = ((moveStick.current.dx - moveStick.center.dx) / stickRange)
-        .clamp(-1.0, 1.0);
-  }
+    if (aimStick.active) {
+      final delta = aimStick.current - aimStick.center;
+      final distance = delta.distance;
 
-  if (aimStick.active) {
-    final delta = aimStick.current - aimStick.center;
-    final distance = delta.distance;
+      if (distance > stickRange && distance > 0) {
+        final overflow = distance - stickRange;
+        final direction = delta / distance;
+        aimStick.center =
+            aimStick.center + direction * overflow * recenterStrength;
+      }
 
-    if (distance > stickRange && distance > 0) {
-      final overflow = distance - stickRange;
-      final direction = delta / distance;
-
-      aimStick.center = aimStick.center + direction * overflow * recenterStrength;
+      aimInputX = ((aimStick.current.dx - aimStick.center.dx) / stickRange)
+          .clamp(-1.0, 1.0);
+      aimInputY = ((aimStick.current.dy - aimStick.center.dy) / stickRange)
+          .clamp(-1.0, 1.0);
     }
 
-    aimInputX = ((aimStick.current.dx - aimStick.center.dx) / stickRange)
-        .clamp(-1.0, 1.0);
-    aimInputY = ((aimStick.current.dy - aimStick.center.dy) / stickRange)
-        .clamp(-1.0, 1.0);
+    playerX += moveInput * GameConfig.moveSpeed * dt;
+    aimX += aimInputX * GameConfig.aimSpeed * dt;
+    aimY += aimInputY * GameConfig.aimVerticalSpeed * dt;
+
+    playerX = playerX.clamp(-GameConfig.playerClamp, GameConfig.playerClamp);
+    aimX = aimX.clamp(-GameConfig.aimClamp, GameConfig.aimClamp);
+    aimY = aimY.clamp(
+      GameConfig.aimVerticalUpClamp,
+      GameConfig.aimVerticalDownClamp,
+    );
+
+    bobTime += dt * (1.0 + moveInput.abs() * 2.0);
   }
-
-  playerX += moveInput * GameConfig.moveSpeed * dt;
-  aimX += aimInputX * GameConfig.aimSpeed * dt;
-  aimY += aimInputY * GameConfig.aimVerticalSpeed * dt;
-
-  playerX = playerX.clamp(-GameConfig.playerClamp, GameConfig.playerClamp);
-  aimX = aimX.clamp(-GameConfig.aimClamp, GameConfig.aimClamp);
-  aimY = aimY.clamp(
-    GameConfig.aimVerticalUpClamp,
-    GameConfig.aimVerticalDownClamp,
-  );
-
-  bobTime += dt * (1.0 + moveInput.abs() * 2.0);
-}
 
   void _updateWaveLogic(double dt) {
     if (betweenWaves) {
@@ -478,6 +484,7 @@ void _updateControls(double dt) {
 
   // ============================================================
   // HACKABLE: enemy stats by type
+  // Hard mode boss bonus: boss health += currentWave
   // ============================================================
   void _spawnEnemy(EnemyType type) {
     final distance = _rng.nextDouble() *
@@ -601,9 +608,7 @@ void _updateControls(double dt) {
 
   // ============================================================
   // HACKABLE: enemy projectile behavior
-  // IMPORTANT:
   // Projectile position is stored in WORLD SPACE.
-  // That means shots do not follow the player after firing.
   // ============================================================
   void _updateEnemyShooting(Enemy enemy, double dt) {
     enemy.shootCooldown -= dt;
@@ -644,11 +649,9 @@ void _updateControls(double dt) {
     double horizontalSpread,
     bool isBossShot,
   ) {
-    // WORLD-SPACE starting position
     final startX = enemy.x;
     final startY = enemy.distance;
 
-    // Lock onto the player's current lane ONCE.
     final targetX = playerX;
     const targetY = 0.9;
 
@@ -682,7 +685,6 @@ void _updateControls(double dt) {
     final dead = <EnemyProjectile>[];
 
     for (final projectile in enemyProjectiles) {
-      // Move only by locked velocity.
       projectile.position = Offset(
         projectile.position.dx + projectile.velocity.dx * dt,
         projectile.position.dy + projectile.velocity.dy * dt,
@@ -694,14 +696,13 @@ void _updateControls(double dt) {
         continue;
       }
 
-      // Player hit check in WORLD SPACE
       final playerHitX = playerX;
       const playerHitY = 0.9;
 
       final dx = projectile.position.dx - playerHitX;
       final dy = projectile.position.dy - playerHitY;
       final distance = math.sqrt(dx * dx + dy * dy);
-`
+
       if (distance <= (GameConfig.projectileHitRadius / 100.0)) {
         health -= projectile.isBossShot ? 2 : 1;
         dead.add(projectile);
@@ -718,6 +719,9 @@ void _updateControls(double dt) {
     traces.removeWhere((t) => t.life <= 0);
   }
 
+  // ============================================================
+  // HACKABLE: hit test and scoring rules
+  // ============================================================
   void _fire(Size size) {
     if (state != GameState.playing) return;
     if (fireCooldownTimer > 0) return;
@@ -864,18 +868,21 @@ void _updateControls(double dt) {
     return min + _rng.nextDouble() * (max - min);
   }
 
- 
+  Rect _calcFireButtonRect(Size size) {
+    final bool isTablet = size.shortestSide >= 600;
 
-  Rect _calcPauseButtonRect(Size size) {
+    final double buttonSize = math.min(
+      size.width * (isTablet ? 0.16 : GameConfig.fireButtonWidthFactor),
+      isTablet ? 112.0 : GameConfig.fireButtonMaxSize,
+    );
+
     return Rect.fromLTWH(
-      size.width - 66.0,
-      18.0,
-      48.0,
-      48.0,
+      size.width - buttonSize - (isTablet ? 14.0 : 18.0),
+      size.height - buttonSize - (isTablet ? 155.0 : 110.0),
+      buttonSize,
+      buttonSize,
     );
   }
-
-  i
 
   Rect _calcPauseButtonRect(Size size) {
     return Rect.fromLTWH(
@@ -968,125 +975,146 @@ void _updateControls(double dt) {
     );
   }
 
+  Widget _buildHud(Size size) {
+    final bool isTablet = size.shortestSide >= 600;
+    final double hudScale = isTablet ? 1.18 : 1.0;
 
-  Widget _buildStickVisual({
-    required Offset center,
-    required Offset knob,
-    required String label,
-    required bool active,
-  }) {
-    final clamped = _clampKnob(center, knob, 34);
-
-    return Positioned(
-      left: center.dx - 45,
-      top: center.dy - 45,
-      child: IgnorePointer(
-        child: SizedBox(
-          width: 90,
-          height: 90,
-          child: Stack(
-            children: [
-              Container(
-                width: 90,
-                height: 90,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.black.withValues(alpha: 0.18),
-                  border: Border.all(
-                    color: GameConfig.accent.withValues(
-                      alpha: active ? 0.9 : 0.35,
-                    ),
-                    width: 2,
-                  ),
-                ),
-              ),
-              Positioned(
-                left: clamped.dx - center.dx + 27,
-                top: clamped.dy - center.dy + 27,
-                child: Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: GameConfig.accent.withValues(
-                      alpha: active ? 0.55 : 0.22,
-                    ),
-                    border: Border.all(
-                      color: GameConfig.accent.withValues(alpha: 0.95),
-                    ),
-                  ),
-                ),
-              ),
-              Positioned.fill(
-                child: Center(
-                  child: Transform.translate(
-                    offset: const Offset(0, 58),
-                    child: Text(
-                      label,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.white.withValues(alpha: 0.82),
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    // ============================================================
+    // HACKABLE: default stick positions
+    // These scale for larger screens like iPad/tablets.
+    // ============================================================
+    final leftCenter = Offset(
+      85 * hudScale,
+      size.height - (isTablet ? 120 : 95),
     );
-  }
 
-  Widget _pill(String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.32),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: GameConfig.accent.withValues(alpha: 0.40),
-        ),
-      ),
-      child: Text(
-        text,
-        style: const TextStyle(fontWeight: FontWeight.w600),
-      ),
+    final rightCenter = Offset(
+      size.width - (isTablet ? 165 : 140),
+      size.height - (isTablet ? 145 : 120),
     );
-  }
 
-  Widget _buildBanner() {
     return SafeArea(
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: Padding(
-          padding: const EdgeInsets.only(top: 84),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-   
- 
+      child: Stack(
+        children: [
+          Positioned(
+            left: 14,
+            top: 12,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Wookiee revenge',
+                  style: TextStyle(
+                    color: GameConfig.accent,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _pill('Wave: $currentWave'),
+                    _pill('Score: $score'),
+                    _pill('Health: $health'),
+                    _pill(_difficultyLabel),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Positioned(
+            right: 18,
+            top: 18,
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.30),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: GameConfig.accent.withValues(alpha: 0.55),
+                ),
+              ),
+              child: Icon(
+                Icons.pause,
+                color: GameConfig.accent,
+              ),
+            ),
+          ),
+          _buildStickVisual(
+            center: moveStick.active ? moveStick.center : leftCenter,
+            knob: moveStick.active ? moveStick.current : leftCenter,
+            label: 'MOVE',
+            active: moveStick.active,
+            sizeMultiplier: hudScale,
+          ),
+          _buildStickVisual(
+            center: aimStick.active ? aimStick.center : rightCenter,
+            knob: aimStick.active ? aimStick.current : rightCenter,
+            label: 'AIM',
+            active: aimStick.active,
+            sizeMultiplier: hudScale,
+          ),
+          Positioned(
+            right: isTablet ? 20 : 18,
+            bottom: isTablet ? 135 : 110,
+            child: Container(
+              width: fireButtonRect.width,
+              height: fireButtonRect.height,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: firePressed
+                    ? Colors.redAccent.withValues(alpha: 0.45)
+                    : Colors.redAccent.withValues(alpha: 0.20),
+                border: Border.all(
+                  color: Colors.redAccent.withValues(alpha: 0.95),
+                  width: 2.5,
+                ),
+              ),
+              child: const Center(
+                child: Text(
+                  'FIRE',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.1,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildStickVisual({
     required Offset center,
     required Offset knob,
     required String label,
     required bool active,
+    double sizeMultiplier = 1.0,
   }) {
-    final clamped = _clampKnob(center, knob, 34);
+    final double baseSize = 90 * sizeMultiplier;
+    final double knobSize = 36 * sizeMultiplier;
+    final double maxRadius = 34 * sizeMultiplier;
+
+    final clamped = _clampKnob(center, knob, maxRadius);
 
     return Positioned(
-      left: center.dx - 45,
-      top: center.dy - 45,
+      left: center.dx - baseSize / 2,
+      top: center.dy - baseSize / 2,
       child: IgnorePointer(
         child: SizedBox(
-          width: 90,
-          height: 90,
+          width: baseSize,
+          height: baseSize,
           child: Stack(
             children: [
               Container(
-                width: 90,
-                height: 90,
+                width: baseSize,
+                height: baseSize,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: Colors.black.withValues(alpha: 0.18),
@@ -1099,11 +1127,11 @@ void _updateControls(double dt) {
                 ),
               ),
               Positioned(
-                left: clamped.dx - center.dx + 27,
-                top: clamped.dy - center.dy + 27,
+                left: clamped.dx - center.dx + (baseSize - knobSize) / 2,
+                top: clamped.dy - center.dy + (baseSize - knobSize) / 2,
                 child: Container(
-                  width: 36,
-                  height: 36,
+                  width: knobSize,
+                  height: knobSize,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: GameConfig.accent.withValues(
@@ -1118,11 +1146,11 @@ void _updateControls(double dt) {
               Positioned.fill(
                 child: Center(
                   child: Transform.translate(
-                    offset: const Offset(0, 58),
+                    offset: Offset(0, 58 * sizeMultiplier),
                     child: Text(
                       label,
                       style: TextStyle(
-                        fontSize: 11,
+                        fontSize: 11 * sizeMultiplier,
                         color: Colors.white.withValues(alpha: 0.82),
                         fontWeight: FontWeight.w700,
                       ),
@@ -1288,7 +1316,8 @@ void _updateControls(double dt) {
               _buildDifficultyButton(
                 mode: DifficultyMode.hard,
                 title: 'Hard',
-                subtitle: '1 health • enemy projectiles • bosses gain +wave health',
+                subtitle:
+                    '1 health • enemy projectiles • bosses gain +wave health',
               ),
               const SizedBox(height: 12),
               SizedBox(
