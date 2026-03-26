@@ -27,7 +27,7 @@ class _GamePageState extends State<GamePage>
   // ============================================================
   // HACKABLE: visible version label on launch screen
   // ============================================================
-  static const String appVersion = 'v0.5.2';
+  static const String appVersion = 'v0.5.3';
 
   GameState state = GameState.menu;
 
