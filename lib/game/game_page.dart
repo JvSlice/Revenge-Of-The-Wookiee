@@ -27,7 +27,7 @@ class _GamePageState extends State<GamePage>
   // ============================================================
   // HACKABLE: visible version label on launch screen
   // ============================================================
-  static const String appVersion = 'v0.5.3';
+  static const String appVersion = 'v0.5.5';
 
   GameState state = GameState.menu;
 
@@ -125,7 +125,8 @@ class _GamePageState extends State<GamePage>
     }
   }
 
-  bool get _enemyProjectilesEnabled => selectedDifficulty != DifficultyMode.easy;
+  bool get _enemyProjectilesEnabled =>
+      selectedDifficulty != DifficultyMode.easy;
   bool get _hardModeBossBonus => selectedDifficulty == DifficultyMode.hard;
 
   void _startGame() {
@@ -240,8 +241,8 @@ class _GamePageState extends State<GamePage>
       final dx = delta.dx;
 
       if (dx.abs() > deadzone) {
-        final normalized =
-            ((dx.abs() - deadzone) / (stickRange - deadzone)).clamp(0.0, 1.0);
+        final normalized = ((dx.abs() - deadzone) / (stickRange - deadzone))
+            .clamp(0.0, 1.0);
         moveInput = dx.isNegative ? -normalized : normalized;
       }
     }
@@ -252,14 +253,14 @@ class _GamePageState extends State<GamePage>
       final dy = delta.dy;
 
       if (dx.abs() > deadzone) {
-        final normalized =
-            ((dx.abs() - deadzone) / (stickRange - deadzone)).clamp(0.0, 1.0);
+        final normalized = ((dx.abs() - deadzone) / (stickRange - deadzone))
+            .clamp(0.0, 1.0);
         aimInputX = dx.isNegative ? -normalized : normalized;
       }
 
       if (dy.abs() > deadzone) {
-        final normalized =
-            ((dy.abs() - deadzone) / (stickRange - deadzone)).clamp(0.0, 1.0);
+        final normalized = ((dy.abs() - deadzone) / (stickRange - deadzone))
+            .clamp(0.0, 1.0);
         aimInputY = dy.isNegative ? -normalized : normalized;
       }
     }
@@ -491,7 +492,8 @@ class _GamePageState extends State<GamePage>
   // Hard mode boss bonus: boss health += currentWave
   // ============================================================
   void _spawnEnemy(EnemyType type) {
-    final distance = _rng.nextDouble() *
+    final distance =
+        _rng.nextDouble() *
             (GameConfig.enemyStartDistanceMax -
                 GameConfig.enemyStartDistanceMin) +
         GameConfig.enemyStartDistanceMin;
@@ -529,7 +531,11 @@ class _GamePageState extends State<GamePage>
         speed = GameConfig.enemyBaseSpeed + currentWave * 0.06;
         tint = const Color(0xFFFFC36E);
         radiusScale = currentWave >= 10 ? 2.0 : 1.75;
-        hp = currentWave >= 10 ? 8 : currentWave >= 6 ? 6 : 5;
+        hp = currentWave >= 10
+            ? 8
+            : currentWave >= 6
+            ? 6
+            : 5;
 
         if (_hardModeBossBonus) {
           hp += currentWave;
@@ -543,7 +549,8 @@ class _GamePageState extends State<GamePage>
         );
         break;
       case EnemyType.standard:
-        speed = GameConfig.enemyBaseSpeed +
+        speed =
+            GameConfig.enemyBaseSpeed +
             (currentWave * GameConfig.enemySpeedRamp) +
             _rng.nextDouble() * 0.45;
         tint = const Color(0xFFC9D0D6);
@@ -591,7 +598,8 @@ class _GamePageState extends State<GamePage>
       enemy.x += (driftTarget - enemy.x) * dt * 0.65;
 
       if (enemy.weave != 0) {
-        enemy.x += math.sin(survivalTime * (1.5 + enemy.weave)) *
+        enemy.x +=
+            math.sin(survivalTime * (1.5 + enemy.weave)) *
             enemy.weave *
             dt *
             0.9;
@@ -669,10 +677,7 @@ class _GamePageState extends State<GamePage>
         ? GameConfig.projectileBossSpeed
         : GameConfig.projectileBaseSpeed;
 
-    final velocity = Offset(
-      (dx / len) * speed,
-      (dy / len) * speed,
-    );
+    final velocity = Offset((dx / len) * speed, (dy / len) * speed);
 
     enemyProjectiles.add(
       EnemyProjectile(
@@ -753,12 +758,13 @@ class _GamePageState extends State<GamePage>
       final dx = (enemyScreen.dx - crosshair.dx).abs();
       final dy = (enemyScreen.dy - crosshair.dy).abs();
 
-      final directlyHit = dx <= (radius + GameConfig.hitPadding) &&
+      final directlyHit =
+          dx <= (radius + GameConfig.hitPadding) &&
           dy <= (radius + GameConfig.hitPadding);
 
       final emergencyCloseHit =
           enemy.distance <= GameConfig.emergencyHitDistance &&
-              dx <= (radius + GameConfig.emergencyHitPadding);
+          dx <= (radius + GameConfig.emergencyHitPadding);
 
       if (!directlyHit && !emergencyCloseHit) continue;
 
@@ -782,10 +788,10 @@ class _GamePageState extends State<GamePage>
         score += bestTarget.type == EnemyType.boss
             ? 12
             : bestTarget.type == EnemyType.heavy
-                ? 4
-                : bestTarget.type == EnemyType.scout
-                    ? 2
-                    : 1;
+            ? 4
+            : bestTarget.type == EnemyType.scout
+            ? 2
+            : 1;
       }
     }
   }
@@ -892,12 +898,7 @@ class _GamePageState extends State<GamePage>
   }
 
   Rect _calcPauseButtonRect(Size size) {
-    return Rect.fromLTWH(
-      size.width - 66.0,
-      18.0,
-      48.0,
-      48.0,
-    );
+    return Rect.fromLTWH(size.width - 66.0, 18.0, 48.0, 48.0);
   }
 
   int get _currentBossHealth {
@@ -1070,10 +1071,7 @@ class _GamePageState extends State<GamePage>
                   color: GameConfig.accent.withValues(alpha: 0.55),
                 ),
               ),
-              child: Icon(
-                Icons.pause,
-                color: GameConfig.accent,
-              ),
+              child: Icon(Icons.pause, color: GameConfig.accent),
             ),
           ),
           _buildStickVisual(
@@ -1203,14 +1201,9 @@ class _GamePageState extends State<GamePage>
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.32),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: GameConfig.accent.withValues(alpha: 0.40),
-        ),
+        border: Border.all(color: GameConfig.accent.withValues(alpha: 0.40)),
       ),
-      child: Text(
-        text,
-        style: const TextStyle(fontWeight: FontWeight.w600),
-      ),
+      child: Text(text, style: const TextStyle(fontWeight: FontWeight.w600)),
     );
   }
 
@@ -1388,9 +1381,7 @@ class _GamePageState extends State<GamePage>
           decoration: BoxDecoration(
             color: const Color(0xFF10161C),
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: GameConfig.accent.withValues(alpha: 0.5),
-            ),
+            border: Border.all(color: GameConfig.accent.withValues(alpha: 0.5)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1445,9 +1436,7 @@ class _GamePageState extends State<GamePage>
           decoration: BoxDecoration(
             color: const Color(0xFF10161C),
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: GameConfig.accent.withValues(alpha: 0.5),
-            ),
+            border: Border.all(color: GameConfig.accent.withValues(alpha: 0.5)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
