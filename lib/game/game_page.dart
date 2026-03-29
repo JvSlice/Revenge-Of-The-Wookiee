@@ -27,7 +27,7 @@ class _GamePageState extends State<GamePage>
   // ============================================================
   // HACKABLE: visible version label on launch screen
   // ============================================================
-  static const String appVersion = 'v0.5.4';
+  static const String appVersion = 'v0.5.3';
 
   GameState state = GameState.menu;
 
@@ -59,6 +59,13 @@ class _GamePageState extends State<GamePage>
   bool firePressed = false;
   Rect fireButtonRect = Rect.zero;
   Rect pauseButtonRect = Rect.zero;
+
+  // ============================================================
+  // HACKABLE: screen/orientation tracking
+  // Used to reset live touch controls cleanly on rotation.
+  // ============================================================
+  Size _lastLayoutSize = Size.zero;
+  bool _lastLandscape = false;
 
   int currentWave = 0;
   bool betweenWaves = false;
@@ -118,8 +125,7 @@ class _GamePageState extends State<GamePage>
     }
   }
 
-  bool get _enemyProjectilesEnabled =>
-      selectedDifficulty != DifficultyMode.easy;
+  bool get _enemyProjectilesEnabled => selectedDifficulty != DifficultyMode.easy;
   bool get _hardModeBossBonus => selectedDifficulty == DifficultyMode.hard;
 
   void _startGame() {
@@ -218,8 +224,8 @@ class _GamePageState extends State<GamePage>
 
   // ============================================================
   // HACKABLE: thumbstick feel
-  // This version makes the sticks less "sticky" by letting the
-  // center drift toward the thumb when the thumb pushes far out.
+  // Fixed-base sticks with a deadzone.
+  // This keeps the on-screen controls from sliding around.
   // ============================================================
   void _updateControls(double dt) {
     double moveInput = 0.0;
@@ -227,38 +233,35 @@ class _GamePageState extends State<GamePage>
     double aimInputY = 0.0;
 
     const double stickRange = 55.0;
-    const double recenterStrength = 0.22;
+    const double deadzone = 10.0;
 
     if (moveStick.active) {
       final delta = moveStick.current - moveStick.center;
-      final distance = delta.distance;
+      final dx = delta.dx;
 
-      if (distance > stickRange && distance > 0) {
-        final overflow = distance - stickRange;
-        final direction = delta / distance;
-        moveStick.center =
-            moveStick.center + direction * overflow * recenterStrength;
+      if (dx.abs() > deadzone) {
+        final normalized =
+            ((dx.abs() - deadzone) / (stickRange - deadzone)).clamp(0.0, 1.0);
+        moveInput = dx.isNegative ? -normalized : normalized;
       }
-
-      moveInput = ((moveStick.current.dx - moveStick.center.dx) / stickRange)
-          .clamp(-1.0, 1.0);
     }
 
     if (aimStick.active) {
       final delta = aimStick.current - aimStick.center;
-      final distance = delta.distance;
+      final dx = delta.dx;
+      final dy = delta.dy;
 
-      if (distance > stickRange && distance > 0) {
-        final overflow = distance - stickRange;
-        final direction = delta / distance;
-        aimStick.center =
-            aimStick.center + direction * overflow * recenterStrength;
+      if (dx.abs() > deadzone) {
+        final normalized =
+            ((dx.abs() - deadzone) / (stickRange - deadzone)).clamp(0.0, 1.0);
+        aimInputX = dx.isNegative ? -normalized : normalized;
       }
 
-      aimInputX = ((aimStick.current.dx - aimStick.center.dx) / stickRange)
-          .clamp(-1.0, 1.0);
-      aimInputY = ((aimStick.current.dy - aimStick.center.dy) / stickRange)
-          .clamp(-1.0, 1.0);
+      if (dy.abs() > deadzone) {
+        final normalized =
+            ((dy.abs() - deadzone) / (stickRange - deadzone)).clamp(0.0, 1.0);
+        aimInputY = dy.isNegative ? -normalized : normalized;
+      }
     }
 
     playerX += moveInput * GameConfig.moveSpeed * dt;
@@ -488,8 +491,7 @@ class _GamePageState extends State<GamePage>
   // Hard mode boss bonus: boss health += currentWave
   // ============================================================
   void _spawnEnemy(EnemyType type) {
-    final distance =
-        _rng.nextDouble() *
+    final distance = _rng.nextDouble() *
             (GameConfig.enemyStartDistanceMax -
                 GameConfig.enemyStartDistanceMin) +
         GameConfig.enemyStartDistanceMin;
@@ -527,11 +529,7 @@ class _GamePageState extends State<GamePage>
         speed = GameConfig.enemyBaseSpeed + currentWave * 0.06;
         tint = const Color(0xFFFFC36E);
         radiusScale = currentWave >= 10 ? 2.0 : 1.75;
-        hp = currentWave >= 10
-            ? 8
-            : currentWave >= 6
-            ? 6
-            : 5;
+        hp = currentWave >= 10 ? 8 : currentWave >= 6 ? 6 : 5;
 
         if (_hardModeBossBonus) {
           hp += currentWave;
@@ -545,8 +543,7 @@ class _GamePageState extends State<GamePage>
         );
         break;
       case EnemyType.standard:
-        speed =
-            GameConfig.enemyBaseSpeed +
+        speed = GameConfig.enemyBaseSpeed +
             (currentWave * GameConfig.enemySpeedRamp) +
             _rng.nextDouble() * 0.45;
         tint = const Color(0xFFC9D0D6);
@@ -594,8 +591,7 @@ class _GamePageState extends State<GamePage>
       enemy.x += (driftTarget - enemy.x) * dt * 0.65;
 
       if (enemy.weave != 0) {
-        enemy.x +=
-            math.sin(survivalTime * (1.5 + enemy.weave)) *
+        enemy.x += math.sin(survivalTime * (1.5 + enemy.weave)) *
             enemy.weave *
             dt *
             0.9;
@@ -673,7 +669,10 @@ class _GamePageState extends State<GamePage>
         ? GameConfig.projectileBossSpeed
         : GameConfig.projectileBaseSpeed;
 
-    final velocity = Offset((dx / len) * speed, (dy / len) * speed);
+    final velocity = Offset(
+      (dx / len) * speed,
+      (dy / len) * speed,
+    );
 
     enemyProjectiles.add(
       EnemyProjectile(
@@ -754,13 +753,12 @@ class _GamePageState extends State<GamePage>
       final dx = (enemyScreen.dx - crosshair.dx).abs();
       final dy = (enemyScreen.dy - crosshair.dy).abs();
 
-      final directlyHit =
-          dx <= (radius + GameConfig.hitPadding) &&
+      final directlyHit = dx <= (radius + GameConfig.hitPadding) &&
           dy <= (radius + GameConfig.hitPadding);
 
       final emergencyCloseHit =
           enemy.distance <= GameConfig.emergencyHitDistance &&
-          dx <= (radius + GameConfig.emergencyHitPadding);
+              dx <= (radius + GameConfig.emergencyHitPadding);
 
       if (!directlyHit && !emergencyCloseHit) continue;
 
@@ -784,10 +782,10 @@ class _GamePageState extends State<GamePage>
         score += bestTarget.type == EnemyType.boss
             ? 12
             : bestTarget.type == EnemyType.heavy
-            ? 4
-            : bestTarget.type == EnemyType.scout
-            ? 2
-            : 1;
+                ? 4
+                : bestTarget.type == EnemyType.scout
+                    ? 2
+                    : 1;
       }
     }
   }
@@ -876,7 +874,7 @@ class _GamePageState extends State<GamePage>
 
   Rect _calcFireButtonRect(Size size) {
     final bool isTablet = size.shortestSide >= 600;
-    final bool isLandScape = size.width > size.height;
+    final bool isLandscape = size.width > size.height;
 
     final double buttonSize = math.min(
       size.width * (isTablet ? 0.16 : GameConfig.fireButtonWidthFactor),
@@ -884,17 +882,22 @@ class _GamePageState extends State<GamePage>
     );
 
     return Rect.fromLTWH(
-      size.width - buttonSize - (isLandScape ? 10.0 : (isTablet ? 14.0 : 18.0)),
+      size.width - buttonSize - (isLandscape ? 10.0 : (isTablet ? 14.0 : 18.0)),
       size.height -
           buttonSize -
-          (isLandScape ? 85.0 : (isTablet ? 155.0 : 110.0)),
+          (isLandscape ? 85.0 : (isTablet ? 155.0 : 110.0)),
       buttonSize,
       buttonSize,
     );
   }
 
   Rect _calcPauseButtonRect(Size size) {
-    return Rect.fromLTWH(size.width - 66.0, 18.0, 48.0, 48.0);
+    return Rect.fromLTWH(
+      size.width - 66.0,
+      18.0,
+      48.0,
+      48.0,
+    );
   }
 
   int get _currentBossHealth {
@@ -934,6 +937,18 @@ class _GamePageState extends State<GamePage>
           final size = Size(constraints.maxWidth, constraints.maxHeight);
           fireButtonRect = _calcFireButtonRect(size);
           pauseButtonRect = _calcPauseButtonRect(size);
+
+          final isLandscape = size.width > size.height;
+
+          // Reset active touch controls if layout/orientation changed.
+          // This prevents weird behavior after rotating during gameplay.
+          if (_lastLayoutSize != size || _lastLandscape != isLandscape) {
+            moveStick.stop();
+            aimStick.stop();
+            firePressed = false;
+            _lastLayoutSize = size;
+            _lastLandscape = isLandscape;
+          }
 
           return Listener(
             onPointerDown: (e) => _handlePointerDown(e, size),
@@ -981,27 +996,32 @@ class _GamePageState extends State<GamePage>
 
   Widget _buildHud(Size size) {
     final bool isTablet = size.shortestSide >= 600;
-    final bool isLandScape = size.width > size.height;
+    final bool isLandscape = size.width > size.height;
     final double hudScale = isTablet ? 1.18 : 1.0;
 
     // ============================================================
-    // HACKABLE: default stick positions
-    // These scale for larger screens like iPad/tablets.
+    // HACKABLE: default stick positions by screen shape
+    // Portrait and landscape use different layouts.
     // ============================================================
     final leftCenter = Offset(
-      isLandScape ? 95 * hudScale : 85 * hudScale,
+      isLandscape ? 95 * hudScale : 85 * hudScale,
       size.height - (isTablet ? 120 : 95),
     );
 
     final rightCenter = Offset(
-      size.width - (isTablet ? 230 : 210),
-      size.height - (isTablet ? 165 : 140),
+      isLandscape
+          ? size.width - (isTablet ? 250 : 220)
+          : size.width - (isTablet ? 185 : 160),
+      isLandscape
+          ? size.height - (isTablet ? 110 : 95)
+          : size.height - (isTablet ? 145 : 120),
     );
-    final double fireBottom = isLandScape
+
+    final double fireBottom = isLandscape
         ? (isTablet ? 90 : 75)
         : (isTablet ? 135 : 110);
 
-    final double fireRight = isLandScape
+    final double fireRight = isLandscape
         ? (isTablet ? 28 : 22)
         : (isTablet ? 20 : 18);
 
@@ -1050,7 +1070,10 @@ class _GamePageState extends State<GamePage>
                   color: GameConfig.accent.withValues(alpha: 0.55),
                 ),
               ),
-              child: Icon(Icons.pause, color: GameConfig.accent),
+              child: Icon(
+                Icons.pause,
+                color: GameConfig.accent,
+              ),
             ),
           ),
           _buildStickVisual(
@@ -1180,9 +1203,14 @@ class _GamePageState extends State<GamePage>
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.32),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: GameConfig.accent.withValues(alpha: 0.40)),
+        border: Border.all(
+          color: GameConfig.accent.withValues(alpha: 0.40),
+        ),
       ),
-      child: Text(text, style: const TextStyle(fontWeight: FontWeight.w600)),
+      child: Text(
+        text,
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      ),
     );
   }
 
@@ -1360,7 +1388,9 @@ class _GamePageState extends State<GamePage>
           decoration: BoxDecoration(
             color: const Color(0xFF10161C),
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: GameConfig.accent.withValues(alpha: 0.5)),
+            border: Border.all(
+              color: GameConfig.accent.withValues(alpha: 0.5),
+            ),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1415,7 +1445,9 @@ class _GamePageState extends State<GamePage>
           decoration: BoxDecoration(
             color: const Color(0xFF10161C),
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: GameConfig.accent.withValues(alpha: 0.5)),
+            border: Border.all(
+              color: GameConfig.accent.withValues(alpha: 0.5),
+            ),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
