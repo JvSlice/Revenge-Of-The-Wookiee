@@ -15,6 +15,7 @@ class RedwoodPainter extends CustomPainter {
     required this.enemyProjectiles,
     required this.traces,
     required this.playerX,
+    required this.wolrdZ,
     required this.bobTime,
     required this.state,
     required this.currentWave,
@@ -41,7 +42,7 @@ class RedwoodPainter extends CustomPainter {
   final Offset crosshairPosition;
 
   final double Function(double worldX, double distance, Size size)
-      worldXToScreen;
+  worldXToScreen;
   final double Function(double distance, Size size) enemyScreenY;
   final double Function(double distance) enemyRadius;
 
@@ -63,17 +64,12 @@ class RedwoodPainter extends CustomPainter {
       ..shader = const LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [
-          Color(0xFF243229),
-          Color(0xFF4E6A54),
-          Color(0xFF9FB59D),
-        ],
+        colors: [Color(0xFF243229), Color(0xFF4E6A54), Color(0xFF9FB59D)],
       ).createShader(sky);
 
     canvas.drawRect(sky, skyPaint);
 
-    final mistPaint = Paint()
-      ..color = GameConfig.mist.withValues(alpha: 0.13);
+    final mistPaint = Paint()..color = GameConfig.mist.withValues(alpha: 0.13);
     canvas.drawOval(
       Rect.fromCenter(
         center: Offset(size.width / 2, size.height * 0.47),
@@ -106,16 +102,14 @@ class RedwoodPainter extends CustomPainter {
       ..close();
 
     final forestPaint = Paint()
-      ..shader = const LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          GameConfig.forestMid,
-          GameConfig.forestDark,
-        ],
-      ).createShader(
-        Rect.fromLTWH(0, horizonY, size.width, size.height - horizonY),
-      );
+      ..shader =
+          const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [GameConfig.forestMid, GameConfig.forestDark],
+          ).createShader(
+            Rect.fromLTWH(0, horizonY, size.width, size.height - horizonY),
+          );
 
     canvas.drawPath(leftForest, forestPaint);
     canvas.drawPath(rightForest, forestPaint);
@@ -128,17 +122,14 @@ class RedwoodPainter extends CustomPainter {
       ..close();
 
     final trailPaint = Paint()
-      ..shader = const LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          Color(0xFF6F4B2F),
-          Color(0xFF4B2E1D),
-          Color(0xFF2F1D13),
-        ],
-      ).createShader(
-        Rect.fromLTWH(0, horizonY, size.width, size.height - horizonY),
-      );
+      ..shader =
+          const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF6F4B2F), Color(0xFF4B2E1D), Color(0xFF2F1D13)],
+          ).createShader(
+            Rect.fromLTWH(0, horizonY, size.width, size.height - horizonY),
+          );
 
     canvas.drawPath(trail, trailPaint);
 
@@ -197,7 +188,11 @@ class RedwoodPainter extends CustomPainter {
 
       final edgeX = left
           ? lerpDoubleValue(size.width * 0.40 + shift, 12 + shift, t)
-          : lerpDoubleValue(size.width * 0.60 + shift, size.width - 12 + shift, t);
+          : lerpDoubleValue(
+              size.width * 0.60 + shift,
+              size.width - 12 + shift,
+              t,
+            );
 
       final trunkRect = Rect.fromCenter(
         center: Offset(edgeX, y - trunkHeight * 0.45),
@@ -243,7 +238,8 @@ class RedwoodPainter extends CustomPainter {
   }
 
   void _paintEnemies(Canvas canvas, Size size) {
-    final sorted = [...enemies]..sort((a, b) => b.distance.compareTo(a.distance));
+    final sorted = [...enemies]
+      ..sort((a, b) => b.distance.compareTo(a.distance));
 
     for (final enemy in sorted) {
       final x = worldXToScreen(enemy.x - playerX, enemy.distance, size);
@@ -343,7 +339,12 @@ class RedwoodPainter extends CustomPainter {
 
         canvas.drawRRect(
           RRect.fromRectAndRadius(
-            Rect.fromLTWH(left, top, width * (enemy.health / enemy.maxHealth), 6),
+            Rect.fromLTWH(
+              left,
+              top,
+              width * (enemy.health / enemy.maxHealth),
+              6,
+            ),
             const Radius.circular(3),
           ),
           fg,
@@ -368,10 +369,9 @@ class RedwoodPainter extends CustomPainter {
       final screenY = enemyScreenY(projectile.position.dy, size);
 
       final glow = Paint()
-        ..color = (projectile.isBossShot
-                ? Colors.orangeAccent
-                : Colors.redAccent)
-            .withValues(alpha: 0.22)
+        ..color =
+            (projectile.isBossShot ? Colors.orangeAccent : Colors.redAccent)
+                .withValues(alpha: 0.22)
         ..style = PaintingStyle.fill;
 
       final core = Paint()
@@ -446,11 +446,7 @@ class RedwoodPainter extends CustomPainter {
 
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromCenter(
-          center: Offset(centerX, baseY),
-          width: 70,
-          height: 138,
-        ),
+        Rect.fromCenter(center: Offset(centerX, baseY), width: 70, height: 138),
         const Radius.circular(12),
       ),
       wood,
