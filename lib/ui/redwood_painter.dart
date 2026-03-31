@@ -15,8 +15,8 @@ class RedwoodPainter extends CustomPainter {
     required this.enemyProjectiles,
     required this.traces,
     required this.playerX,
-    required this.wolrdZ,
     required this.bobTime,
+    required this.worldZ,
     required this.state,
     required this.currentWave,
     required this.firePressed,
@@ -34,6 +34,7 @@ class RedwoodPainter extends CustomPainter {
   final List<ShotTrace> traces;
   final double playerX;
   final double bobTime;
+  final double worldZ;
   final GameState state;
   final int currentWave;
   final bool firePressed;
@@ -49,7 +50,7 @@ class RedwoodPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     _paintBackground(canvas, size);
-    _paintRedwoodHallway(canvas, size);
+    _paintMovingForest(canvas, size);
     _paintEnemies(canvas, size);
     _paintEnemyProjectiles(canvas, size);
     _paintTraces(canvas);
@@ -59,66 +60,59 @@ class RedwoodPainter extends CustomPainter {
   }
 
   void _paintBackground(Canvas canvas, Size size) {
-    final sky = Rect.fromLTWH(0, 0, size.width, size.height * 0.58);
+    final sky = Rect.fromLTWH(0, 0, size.width, size.height * 0.62);
     final skyPaint = Paint()
       ..shader = const LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [Color(0xFF243229), Color(0xFF4E6A54), Color(0xFF9FB59D)],
+        colors: [Color(0xFF17231D), Color(0xFF30443A), Color(0xFF7D9782)],
       ).createShader(sky);
 
     canvas.drawRect(sky, skyPaint);
 
-    final mistPaint = Paint()..color = GameConfig.mist.withValues(alpha: 0.13);
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(size.width / 2, size.height * 0.47),
-        width: size.width * 0.95,
-        height: size.height * 0.25,
-      ),
+    final mistPaint = Paint()
+      ..shader =
+          LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.transparent,
+              GameConfig.mist.withValues(alpha: 0.06),
+              GameConfig.mist.withValues(alpha: 0.16),
+            ],
+          ).createShader(
+            Rect.fromLTWH(
+              0,
+              size.height * 0.25,
+              size.width,
+              size.height * 0.40,
+            ),
+          );
+
+    canvas.drawRect(
+      Rect.fromLTWH(0, size.height * 0.25, size.width, size.height * 0.40),
       mistPaint,
     );
   }
 
-  void _paintRedwoodHallway(Canvas canvas, Size size) {
-    final horizonY = size.height * 0.40;
-    final corridorBottom = size.height;
-    final corridorHalfTop = size.width * 0.10;
-    final corridorHalfBottom = size.width * 0.43;
-    final shift = -playerX * 22;
+  // ============================================================
+  // HACKABLE: moving forest system
+  // worldZ drives the illusion that the player is moving forward.
+  // ============================================================
+  void _paintMovingForest(Canvas canvas, Size size) {
+    final horizonY = size.height * 0.37;
+    final bottomY = size.height;
+    final centerX = size.width / 2;
 
-    final leftForest = Path()
-      ..moveTo(0, corridorBottom)
-      ..lineTo(size.width / 2 - corridorHalfBottom + shift, corridorBottom)
-      ..lineTo(size.width / 2 - corridorHalfTop + shift, horizonY)
-      ..lineTo(0, horizonY * 0.88)
-      ..close();
-
-    final rightForest = Path()
-      ..moveTo(size.width, corridorBottom)
-      ..lineTo(size.width / 2 + corridorHalfBottom + shift, corridorBottom)
-      ..lineTo(size.width / 2 + corridorHalfTop + shift, horizonY)
-      ..lineTo(size.width, horizonY * 0.88)
-      ..close();
-
-    final forestPaint = Paint()
-      ..shader =
-          const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [GameConfig.forestMid, GameConfig.forestDark],
-          ).createShader(
-            Rect.fromLTWH(0, horizonY, size.width, size.height - horizonY),
-          );
-
-    canvas.drawPath(leftForest, forestPaint);
-    canvas.drawPath(rightForest, forestPaint);
+    // HACKABLE: corridor shape
+    final corridorTopHalf = size.width * 0.08;
+    final corridorBottomHalf = size.width * 0.26;
 
     final trail = Path()
-      ..moveTo(size.width / 2 - corridorHalfBottom + shift, corridorBottom)
-      ..lineTo(size.width / 2 + corridorHalfBottom + shift, corridorBottom)
-      ..lineTo(size.width / 2 + corridorHalfTop + shift, horizonY)
-      ..lineTo(size.width / 2 - corridorHalfTop + shift, horizonY)
+      ..moveTo(centerX - corridorBottomHalf, bottomY)
+      ..lineTo(centerX + corridorBottomHalf, bottomY)
+      ..lineTo(centerX + corridorTopHalf, horizonY)
+      ..lineTo(centerX - corridorTopHalf, horizonY)
       ..close();
 
     final trailPaint = Paint()
@@ -126,7 +120,7 @@ class RedwoodPainter extends CustomPainter {
           const LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Color(0xFF6F4B2F), Color(0xFF4B2E1D), Color(0xFF2F1D13)],
+            colors: [Color(0xFF6B4A2F), Color(0xFF4A2F1E), Color(0xFF24170F)],
           ).createShader(
             Rect.fromLTWH(0, horizonY, size.width, size.height - horizonY),
           );
@@ -134,68 +128,145 @@ class RedwoodPainter extends CustomPainter {
     canvas.drawPath(trail, trailPaint);
 
     final linePaint = Paint()
-      ..color = Colors.black.withValues(alpha: 0.22)
-      ..strokeWidth = 1.4;
+      ..color = Colors.black.withValues(alpha: 0.18)
+      ..strokeWidth = 1.25;
 
-    for (int i = 1; i <= 9; i++) {
-      final t = i / 10;
-      final y = lerpDoubleValue(horizonY, corridorBottom, t * t);
-      final halfW = lerpDoubleValue(corridorHalfTop, corridorHalfBottom, t);
+    for (int i = 1; i <= 10; i++) {
+      final t = i / 11;
+      final y = lerpDoubleValue(horizonY, bottomY, t * t);
+      final halfW = lerpDoubleValue(corridorTopHalf, corridorBottomHalf, t);
       canvas.drawLine(
-        Offset(size.width / 2 - halfW + shift, y),
-        Offset(size.width / 2 + halfW + shift, y),
+        Offset(centerX - halfW, y),
+        Offset(centerX + halfW, y),
         linePaint,
       );
     }
 
     final edgeGlow = Paint()
-      ..color = GameConfig.redwoodGlow.withValues(alpha: 0.20)
-      ..strokeWidth = 3.0;
+      ..color = GameConfig.redwoodGlow.withValues(alpha: 0.18)
+      ..strokeWidth = 2.8;
 
     canvas.drawLine(
-      Offset(size.width / 2 - corridorHalfTop + shift, horizonY),
-      Offset(size.width / 2 - corridorHalfBottom + shift, corridorBottom),
+      Offset(centerX - corridorTopHalf, horizonY),
+      Offset(centerX - corridorBottomHalf, bottomY),
       edgeGlow,
     );
     canvas.drawLine(
-      Offset(size.width / 2 + corridorHalfTop + shift, horizonY),
-      Offset(size.width / 2 + corridorHalfBottom + shift, corridorBottom),
+      Offset(centerX + corridorTopHalf, horizonY),
+      Offset(centerX + corridorBottomHalf, bottomY),
       edgeGlow,
     );
 
-    _paintRedwoodColumns(canvas, size, true, horizonY, corridorBottom, shift);
-    _paintRedwoodColumns(canvas, size, false, horizonY, corridorBottom, shift);
+    _paintForestSide(
+      canvas,
+      size,
+      isLeft: true,
+      centerX: centerX,
+      horizonY: horizonY,
+      bottomY: bottomY,
+      corridorTopHalf: corridorTopHalf,
+      corridorBottomHalf: corridorBottomHalf,
+    );
+
+    _paintForestSide(
+      canvas,
+      size,
+      isLeft: false,
+      centerX: centerX,
+      horizonY: horizonY,
+      bottomY: bottomY,
+      corridorTopHalf: corridorTopHalf,
+      corridorBottomHalf: corridorBottomHalf,
+    );
+
+    final fogFront = Paint()
+      ..shader =
+          LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.transparent,
+              GameConfig.mist.withValues(alpha: 0.03),
+              GameConfig.mist.withValues(alpha: 0.10),
+            ],
+          ).createShader(
+            Rect.fromLTWH(0, horizonY - 10, size.width, size.height * 0.35),
+          );
+
+    canvas.drawRect(
+      Rect.fromLTWH(0, horizonY - 10, size.width, size.height * 0.35),
+      fogFront,
+    );
   }
 
-  void _paintRedwoodColumns(
+  void _paintForestSide(
     Canvas canvas,
-    Size size,
-    bool left,
-    double horizonY,
-    double bottomY,
-    double shift,
-  ) {
-    final bark = Paint()..color = GameConfig.redwoodMid;
-    final barkDark = Paint()..color = GameConfig.redwoodDark;
-    final moss = Paint()
-      ..color = const Color(0xFF28452B).withValues(alpha: 0.45);
+    Size size, {
+    required bool isLeft,
+    required double centerX,
+    required double horizonY,
+    required double bottomY,
+    required double corridorTopHalf,
+    required double corridorBottomHalf,
+  }) {
+    const int treeCount = 14;
+    const double depthLoop = 92.0;
+    const double depthSpacing = 7.0;
 
-    for (int i = 0; i < 7; i++) {
-      final t = (i + 1) / 8;
-      final y = lerpDoubleValue(horizonY + 10, bottomY + 30, t * t);
-      final trunkHeight = lerpDoubleValue(24, 260, t);
-      final trunkWidth = lerpDoubleValue(5, 68, t);
+    final barkBase = GameConfig.redwoodMid;
+    final barkDarkBase = GameConfig.redwoodDark;
+    final mossBase = const Color(0xFF2B4C2D);
 
-      final edgeX = left
-          ? lerpDoubleValue(size.width * 0.40 + shift, 12 + shift, t)
-          : lerpDoubleValue(
-              size.width * 0.60 + shift,
-              size.width - 12 + shift,
-              t,
-            );
+    final side = isLeft ? -1.0 : 1.0;
+
+    for (int i = 0; i < treeCount; i++) {
+      final z =
+          (((i * depthSpacing) - worldZ * 12.0) % depthLoop + depthLoop) %
+              depthLoop +
+          1.2;
+
+      final nearT = 1.0 - (z / depthLoop);
+      final perspective = nearT * nearT;
+
+      final y = lerpDoubleValue(horizonY + 6, bottomY + 40, perspective);
+      final trunkHeight = lerpDoubleValue(26, 320, perspective);
+      final trunkWidth = lerpDoubleValue(5, 82, perspective);
+
+      final corridorEdge = lerpDoubleValue(
+        corridorTopHalf,
+        corridorBottomHalf,
+        perspective,
+      );
+
+      final forestOffset = lerpDoubleValue(26, 185, perspective);
+
+      final sway =
+          math.sin((worldZ * 1.7) + i * 0.9 + (isLeft ? 0.0 : 1.4)) *
+          lerpDoubleValue(1.0, 8.0, perspective);
+
+      final playerParallax = -playerX * lerpDoubleValue(8.0, 28.0, perspective);
+
+      final x =
+          centerX +
+          side * (corridorEdge + forestOffset) +
+          sway +
+          playerParallax;
+
+      final bark = Paint()
+        ..color = barkBase.withValues(
+          alpha: lerpDoubleValue(0.22, 0.98, perspective),
+        );
+      final barkDark = Paint()
+        ..color = barkDarkBase.withValues(
+          alpha: lerpDoubleValue(0.20, 0.90, perspective),
+        );
+      final moss = Paint()
+        ..color = mossBase.withValues(
+          alpha: lerpDoubleValue(0.10, 0.36, perspective),
+        );
 
       final trunkRect = Rect.fromCenter(
-        center: Offset(edgeX, y - trunkHeight * 0.45),
+        center: Offset(x, y - trunkHeight * 0.45),
         width: trunkWidth,
         height: trunkHeight,
       );
@@ -214,6 +285,7 @@ class RedwoodPainter extends CustomPainter {
         ),
         barkDark,
       );
+
       canvas.drawRect(
         Rect.fromLTWH(
           trunkRect.left + trunkWidth * 0.58,
@@ -224,12 +296,12 @@ class RedwoodPainter extends CustomPainter {
         barkDark,
       );
 
-      if (i % 2 == 0) {
+      if (i.isEven) {
         canvas.drawOval(
           Rect.fromCenter(
-            center: Offset(edgeX, trunkRect.top + trunkHeight * 0.28),
+            center: Offset(x, trunkRect.top + trunkHeight * 0.28),
             width: trunkWidth * 0.92,
-            height: trunkHeight * 0.15,
+            height: trunkHeight * 0.14,
           ),
           moss,
         );
@@ -246,15 +318,31 @@ class RedwoodPainter extends CustomPainter {
       final y = enemyScreenY(enemy.distance, size);
       final r = enemyRadius(enemy.distance) * enemy.radiusScale;
 
+      final fog = (1.0 - (enemy.distance / GameConfig.enemyStartDistanceMax))
+          .clamp(0.30, 1.0);
+
+      final shadowPaint = Paint()
+        ..color = Colors.black.withValues(alpha: 0.12 * fog);
+
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset(x, y + r * 1.25),
+          width: r * 1.15,
+          height: r * 0.32,
+        ),
+        shadowPaint,
+      );
+
       final bodyPaint = Paint()
         ..color = enemy.alive
-            ? enemy.tint
+            ? enemy.tint.withValues(alpha: fog)
             : Colors.white.withValues(alpha: enemy.flash.clamp(0.0, 1.0));
 
-      final darkPaint = Paint()..color = const Color(0xFF7A848D);
-      final eyePaint = Paint()..color = Colors.redAccent;
+      final darkPaint = Paint()
+        ..color = const Color(0xFF7A848D).withValues(alpha: fog);
+      final eyePaint = Paint()..color = Colors.redAccent.withValues(alpha: fog);
       final limbPaint = Paint()
-        ..color = const Color(0xFF8C979F)
+        ..color = const Color(0xFF8C979F).withValues(alpha: fog)
         ..strokeWidth = math.max(2.0, r * 0.10)
         ..strokeCap = StrokeCap.round;
 
@@ -276,6 +364,7 @@ class RedwoodPainter extends CustomPainter {
         ),
         darkPaint,
       );
+
       canvas.drawCircle(Offset(x - r * 0.10, y - r * 0.92), r * 0.04, eyePaint);
       canvas.drawCircle(Offset(x + r * 0.10, y - r * 0.92), r * 0.04, eyePaint);
 
@@ -324,7 +413,7 @@ class RedwoodPainter extends CustomPainter {
 
       if (enemy.maxHealth > 1 && enemy.alive) {
         final bg = Paint()..color = Colors.black.withValues(alpha: 0.45);
-        final fg = Paint()..color = Colors.redAccent;
+        final fg = Paint()..color = Colors.redAccent.withValues(alpha: fog);
         final width = r * 1.0;
         final left = x - width / 2;
         final top = y - r * 1.70;
@@ -353,12 +442,6 @@ class RedwoodPainter extends CustomPainter {
     }
   }
 
-  // ============================================================
-  // HACKABLE: projectile visuals
-  // IMPORTANT:
-  // projectile.position.dx is WORLD SPACE, so render uses:
-  // projectile.position.dx - playerX
-  // ============================================================
   void _paintEnemyProjectiles(Canvas canvas, Size size) {
     for (final projectile in enemyProjectiles) {
       final screenX = worldXToScreen(

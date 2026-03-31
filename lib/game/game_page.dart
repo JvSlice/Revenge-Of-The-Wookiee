@@ -27,7 +27,7 @@ class _GamePageState extends State<GamePage>
   // ============================================================
   // HACKABLE: visible version label on launch screen
   // ============================================================
-  static const String appVersion = 'v0.5.5';
+  static const String appVersion = 'v1.0.0';
 
   GameState state = GameState.menu;
 
@@ -48,6 +48,7 @@ class _GamePageState extends State<GamePage>
   double aimX = 0.0;
   double aimY = 0.0;
   double bobTime = 0.0;
+  double worldZ = 0.0;
 
   final List<Enemy> enemies = [];
   final List<EnemyProjectile> enemyProjectiles = [];
@@ -140,6 +141,7 @@ class _GamePageState extends State<GamePage>
       aimX = 0.0;
       aimY = 0.0;
       bobTime = 0.0;
+      worldZ = 0.0;
       enemies.clear();
       enemyProjectiles.clear();
       traces.clear();
@@ -189,6 +191,8 @@ class _GamePageState extends State<GamePage>
   }
 
   void _updateGame(double dt) {
+    // HACKABLE: how fast player moves forward
+    worldZ += dt * 1.0;
     survivalTime += dt;
     fireCooldownTimer = math.max(0.0, fireCooldownTimer - dt);
 
@@ -967,6 +971,7 @@ class _GamePageState extends State<GamePage>
                     traces: traces,
                     playerX: playerX,
                     bobTime: bobTime,
+                    worldZ: worldZ,
                     state: state,
                     currentWave: currentWave,
                     firePressed: firePressed,
