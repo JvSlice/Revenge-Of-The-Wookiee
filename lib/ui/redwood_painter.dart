@@ -50,7 +50,7 @@ class RedwoodPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     _paintBackground(canvas, size);
-    _paintMovingForest(canvas, size);
+    _paintForestWorld(canvas, size);
     _paintEnemies(canvas, size);
     _paintEnemyProjectiles(canvas, size);
     _paintTraces(canvas);
@@ -60,102 +60,70 @@ class RedwoodPainter extends CustomPainter {
   }
 
   void _paintBackground(Canvas canvas, Size size) {
-    final sky = Rect.fromLTWH(0, 0, size.width, size.height * 0.62);
+    final skyRect = Rect.fromLTWH(0, 0, size.width, size.height * 0.64);
     final skyPaint = Paint()
       ..shader = const LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [Color(0xFF17231D), Color(0xFF30443A), Color(0xFF7D9782)],
-      ).createShader(sky);
+        colors: [
+          Color(0xFF0F1814),
+          Color(0xFF1F2D25),
+          Color(0xFF43584B),
+          Color(0xFF6F8574),
+        ],
+      ).createShader(skyRect);
 
-    canvas.drawRect(sky, skyPaint);
+    canvas.drawRect(skyRect, skyPaint);
 
-    final mistPaint = Paint()
-      ..shader =
-          LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Colors.transparent,
-              GameConfig.mist.withValues(alpha: 0.06),
-              GameConfig.mist.withValues(alpha: 0.16),
-            ],
-          ).createShader(
-            Rect.fromLTWH(
-              0,
-              size.height * 0.25,
-              size.width,
-              size.height * 0.40,
-            ),
-          );
+    final canopyShade = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Colors.black.withValues(alpha: 0.34),
+          Colors.black.withValues(alpha: 0.08),
+          Colors.transparent,
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height * 0.34));
 
     canvas.drawRect(
-      Rect.fromLTWH(0, size.height * 0.25, size.width, size.height * 0.40),
-      mistPaint,
+      Rect.fromLTWH(0, 0, size.width, size.height * 0.34),
+      canopyShade,
     );
   }
 
   // ============================================================
-  // HACKABLE: moving forest system
-  // worldZ drives the illusion that the player is moving forward.
+  // HACKABLE: main world pass
   // ============================================================
-  void _paintMovingForest(Canvas canvas, Size size) {
-    final horizonY = size.height * 0.37;
+  void _paintForestWorld(Canvas canvas, Size size) {
+    final horizonY = size.height * 0.355;
     final bottomY = size.height;
     final centerX = size.width / 2;
 
-    // HACKABLE: corridor shape
-    final corridorTopHalf = size.width * 0.08;
-    final corridorBottomHalf = size.width * 0.26;
+    final corridorTopHalf = size.width * 0.072;
+    final corridorBottomHalf = size.width * 0.23;
 
-    final trail = Path()
-      ..moveTo(centerX - corridorBottomHalf, bottomY)
-      ..lineTo(centerX + corridorBottomHalf, bottomY)
-      ..lineTo(centerX + corridorTopHalf, horizonY)
-      ..lineTo(centerX - corridorTopHalf, horizonY)
-      ..close();
-
-    final trailPaint = Paint()
-      ..shader =
-          const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF6B4A2F), Color(0xFF4A2F1E), Color(0xFF24170F)],
-          ).createShader(
-            Rect.fromLTWH(0, horizonY, size.width, size.height - horizonY),
-          );
-
-    canvas.drawPath(trail, trailPaint);
-
-    final linePaint = Paint()
-      ..color = Colors.black.withValues(alpha: 0.18)
-      ..strokeWidth = 1.25;
-
-    for (int i = 1; i <= 10; i++) {
-      final t = i / 11;
-      final y = lerpDoubleValue(horizonY, bottomY, t * t);
-      final halfW = lerpDoubleValue(corridorTopHalf, corridorBottomHalf, t);
-      canvas.drawLine(
-        Offset(centerX - halfW, y),
-        Offset(centerX + halfW, y),
-        linePaint,
-      );
-    }
-
-    final edgeGlow = Paint()
-      ..color = GameConfig.redwoodGlow.withValues(alpha: 0.18)
-      ..strokeWidth = 2.8;
-
-    canvas.drawLine(
-      Offset(centerX - corridorTopHalf, horizonY),
-      Offset(centerX - corridorBottomHalf, bottomY),
-      edgeGlow,
+    _paintSideGroundMass(
+      canvas,
+      size,
+      horizonY,
+      bottomY,
+      centerX,
+      corridorTopHalf,
+      corridorBottomHalf,
     );
-    canvas.drawLine(
-      Offset(centerX + corridorTopHalf, horizonY),
-      Offset(centerX + corridorBottomHalf, bottomY),
-      edgeGlow,
+
+    _paintGround(
+      canvas,
+      size,
+      horizonY,
+      bottomY,
+      centerX,
+      corridorTopHalf,
+      corridorBottomHalf,
     );
+
+    _paintFarTreeLine(canvas, size, horizonY, centerX, corridorTopHalf);
 
     _paintForestSide(
       canvas,
@@ -179,24 +147,244 @@ class RedwoodPainter extends CustomPainter {
       corridorBottomHalf: corridorBottomHalf,
     );
 
-    final fogFront = Paint()
+    _paintDepthShade(canvas, size, horizonY);
+  }
+
+  // ============================================================
+  // HACKABLE: these dark wedges give the trunks "ground"
+  // instead of making them float against open sky.
+  // ============================================================
+  void _paintSideGroundMass(
+    Canvas canvas,
+    Size size,
+    double horizonY,
+    double bottomY,
+    double centerX,
+    double corridorTopHalf,
+    double corridorBottomHalf,
+  ) {
+    final leftGround = Path()
+      ..moveTo(0, bottomY)
+      ..lineTo(centerX - corridorBottomHalf, bottomY)
+      ..lineTo(centerX - corridorTopHalf, horizonY)
+      ..lineTo(0, horizonY + size.height * 0.02)
+      ..close();
+
+    final rightGround = Path()
+      ..moveTo(size.width, bottomY)
+      ..lineTo(centerX + corridorBottomHalf, bottomY)
+      ..lineTo(centerX + corridorTopHalf, horizonY)
+      ..lineTo(size.width, horizonY + size.height * 0.02)
+      ..close();
+
+    final sideGroundPaint = Paint()
       ..shader =
-          LinearGradient(
+          const LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Colors.transparent,
-              GameConfig.mist.withValues(alpha: 0.03),
-              GameConfig.mist.withValues(alpha: 0.10),
-            ],
+            colors: [Color(0xFF1B261F), Color(0xFF121910), Color(0xFF0B0A12)],
           ).createShader(
-            Rect.fromLTWH(0, horizonY - 10, size.width, size.height * 0.35),
+            Rect.fromLTWH(0, horizonY, size.width, size.height - horizonY),
           );
 
-    canvas.drawRect(
-      Rect.fromLTWH(0, horizonY - 10, size.width, size.height * 0.35),
-      fogFront,
+    canvas.drawPath(leftGround, sideGroundPaint);
+    canvas.drawPath(rightGround, sideGroundPaint);
+  }
+
+  void _paintGround(
+    Canvas canvas,
+    Size size,
+    double horizonY,
+    double bottomY,
+    double centerX,
+    double corridorTopHalf,
+    double corridorBottomHalf,
+  ) {
+    final groundPath = Path()
+      ..moveTo(centerX - corridorBottomHalf, bottomY)
+      ..lineTo(centerX + corridorBottomHalf, bottomY)
+      ..lineTo(centerX + corridorTopHalf, horizonY)
+      ..lineTo(centerX - corridorTopHalf, horizonY)
+      ..close();
+
+    final groundPaint = Paint()
+      ..shader =
+          const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF68482F), Color(0xFF472F20), Color(0xFF26180F)],
+          ).createShader(
+            Rect.fromLTWH(0, horizonY, size.width, size.height - horizonY),
+          );
+
+    canvas.drawPath(groundPath, groundPaint);
+
+    final centerRut = Paint()..color = Colors.black.withValues(alpha: 0.10);
+    canvas.drawPath(
+      Path()
+        ..moveTo(centerX - corridorBottomHalf * 0.18, bottomY)
+        ..lineTo(centerX + corridorBottomHalf * 0.18, bottomY)
+        ..lineTo(centerX + corridorTopHalf * 0.13, horizonY)
+        ..lineTo(centerX - corridorTopHalf * 0.13, horizonY)
+        ..close(),
+      centerRut,
     );
+
+    final edgeGlow = Paint()
+      ..color = GameConfig.redwoodGlow.withValues(alpha: 0.20)
+      ..strokeWidth = 3.2;
+
+    canvas.drawLine(
+      Offset(centerX - corridorTopHalf, horizonY),
+      Offset(centerX - corridorBottomHalf, bottomY),
+      edgeGlow,
+    );
+    canvas.drawLine(
+      Offset(centerX + corridorTopHalf, horizonY),
+      Offset(centerX + corridorBottomHalf, bottomY),
+      edgeGlow,
+    );
+
+    final depthLines = Paint()
+      ..color = Colors.black.withValues(alpha: 0.16)
+      ..strokeWidth = 1.15;
+
+    for (int i = 1; i <= 11; i++) {
+      final t = i / 12;
+      final y = lerpDoubleValue(horizonY, bottomY, t * t);
+      final half = lerpDoubleValue(corridorTopHalf, corridorBottomHalf, t);
+      canvas.drawLine(
+        Offset(centerX - half, y),
+        Offset(centerX + half, y),
+        depthLines,
+      );
+    }
+
+    _paintGroundStreaks(
+      canvas,
+      size,
+      horizonY,
+      bottomY,
+      centerX,
+      corridorTopHalf,
+      corridorBottomHalf,
+    );
+  }
+
+  void _paintGroundStreaks(
+    Canvas canvas,
+    Size size,
+    double horizonY,
+    double bottomY,
+    double centerX,
+    double corridorTopHalf,
+    double corridorBottomHalf,
+  ) {
+    const int streakCount = 18;
+    const double loopDepth = 44.0;
+    const double spacing = 2.7;
+
+    for (int i = 0; i < streakCount; i++) {
+      final z =
+          (((i * spacing) - worldZ * 10.5) % loopDepth + loopDepth) %
+              loopDepth +
+          0.9;
+      final nearT = 1.0 - (z / loopDepth);
+      final p = nearT * nearT;
+
+      final y = lerpDoubleValue(horizonY + 10, bottomY + 8, p);
+      final half = lerpDoubleValue(corridorTopHalf, corridorBottomHalf, p);
+
+      final offsetSeed = ((i % 6) - 2.5) / 3.0;
+      final x =
+          centerX +
+          offsetSeed * half * 0.75 +
+          math.sin(worldZ * 1.4 + i) * lerpDoubleValue(0.2, 5.0, p) -
+          playerX * lerpDoubleValue(1.5, 9.0, p);
+
+      final width = lerpDoubleValue(3.0, 20.0, p);
+      final height = lerpDoubleValue(1.0, 8.0, p);
+
+      final alpha = lerpDoubleValue(0.04, 0.18, p);
+
+      final debris = Paint()
+        ..color = const Color(0xFF1A120D).withValues(alpha: alpha);
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(center: Offset(x, y), width: width, height: height),
+          Radius.circular(height * 0.35),
+        ),
+        debris,
+      );
+    }
+  }
+
+  // ============================================================
+  // HACKABLE: this is the horizon forest wall.
+  // Far trunks should sit behind this so they emerge naturally.
+  // ============================================================
+  void _paintFarTreeLine(
+    Canvas canvas,
+    Size size,
+    double horizonY,
+    double centerX,
+    double corridorTopHalf,
+  ) {
+    final leftLine = Path()
+      ..moveTo(0, horizonY + size.height * 0.01)
+      ..lineTo(centerX - corridorTopHalf, horizonY)
+      ..lineTo(centerX - corridorTopHalf - size.width * 0.02, horizonY - 6)
+      ..lineTo(0, horizonY - size.height * 0.02)
+      ..close();
+
+    final rightLine = Path()
+      ..moveTo(size.width, horizonY + size.height * 0.01)
+      ..lineTo(centerX + corridorTopHalf, horizonY)
+      ..lineTo(centerX + corridorTopHalf + size.width * 0.02, horizonY - 6)
+      ..lineTo(size.width, horizonY - size.height * 0.02)
+      ..close();
+
+    final linePaint = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [Color(0xFF223028), Color(0xFF141C16)],
+      ).createShader(Rect.fromLTWH(0, horizonY - 20, size.width, 40));
+
+    canvas.drawPath(leftLine, linePaint);
+    canvas.drawPath(rightLine, linePaint);
+
+    final silhouettePaint = Paint()
+      ..color = const Color(0xFF0F1712).withValues(alpha: 0.75);
+
+    for (int i = 0; i < 18; i++) {
+      final t = i / 17;
+      final leftX = lerpDoubleValue(0, centerX - corridorTopHalf - 10, t);
+      final rightX = lerpDoubleValue(
+        centerX + corridorTopHalf + 10,
+        size.width,
+        t,
+      );
+
+      final h = 16 + (math.sin(i * 1.3) + 1) * 10;
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(leftX - 6, horizonY - h, 12, h + 6),
+          const Radius.circular(5),
+        ),
+        silhouettePaint,
+      );
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(rightX - 6, horizonY - h, 12, h + 6),
+          const Radius.circular(5),
+        ),
+        silhouettePaint,
+      );
+    }
   }
 
   void _paintForestSide(
@@ -209,104 +397,203 @@ class RedwoodPainter extends CustomPainter {
     required double corridorTopHalf,
     required double corridorBottomHalf,
   }) {
-    const int treeCount = 14;
-    const double depthLoop = 92.0;
-    const double depthSpacing = 7.0;
-
-    final barkBase = GameConfig.redwoodMid;
-    final barkDarkBase = GameConfig.redwoodDark;
-    final mossBase = const Color(0xFF2B4C2D);
+    const int treeCount = 16;
+    const double depthLoop = 98.0;
+    const double spacing = 6.2;
 
     final side = isLeft ? -1.0 : 1.0;
 
     for (int i = 0; i < treeCount; i++) {
       final z =
-          (((i * depthSpacing) - worldZ * 12.0) % depthLoop + depthLoop) %
+          (((i * spacing) - worldZ * 12.0) % depthLoop + depthLoop) %
               depthLoop +
-          1.2;
+          1.0;
 
       final nearT = 1.0 - (z / depthLoop);
-      final perspective = nearT * nearT;
+      final p = nearT * nearT;
 
-      final y = lerpDoubleValue(horizonY + 6, bottomY + 40, perspective);
-      final trunkHeight = lerpDoubleValue(26, 320, perspective);
-      final trunkWidth = lerpDoubleValue(5, 82, perspective);
+      final y = lerpDoubleValue(horizonY + 6, bottomY + 40, p);
+      final trunkHeight = lerpDoubleValue(26, 355, p);
+      final trunkWidth = lerpDoubleValue(6, 96, p);
 
       final corridorEdge = lerpDoubleValue(
         corridorTopHalf,
         corridorBottomHalf,
-        perspective,
+        p,
       );
-
-      final forestOffset = lerpDoubleValue(26, 185, perspective);
+      final forestOffset = lerpDoubleValue(28, 205, p);
 
       final sway =
-          math.sin((worldZ * 1.7) + i * 0.9 + (isLeft ? 0.0 : 1.4)) *
-          lerpDoubleValue(1.0, 8.0, perspective);
+          math.sin(worldZ * 1.75 + i * 0.8 + (isLeft ? 0.0 : 1.5)) *
+          lerpDoubleValue(0.8, 9.0, p);
 
-      final playerParallax = -playerX * lerpDoubleValue(8.0, 28.0, perspective);
+      final parallax = -playerX * lerpDoubleValue(8.0, 31.0, p);
 
       final x =
-          centerX +
-          side * (corridorEdge + forestOffset) +
-          sway +
-          playerParallax;
+          centerX + side * (corridorEdge + forestOffset) + sway + parallax;
 
-      final bark = Paint()
-        ..color = barkBase.withValues(
-          alpha: lerpDoubleValue(0.22, 0.98, perspective),
-        );
-      final barkDark = Paint()
-        ..color = barkDarkBase.withValues(
-          alpha: lerpDoubleValue(0.20, 0.90, perspective),
-        );
-      final moss = Paint()
-        ..color = mossBase.withValues(
-          alpha: lerpDoubleValue(0.10, 0.36, perspective),
-        );
-
-      final trunkRect = Rect.fromCenter(
-        center: Offset(x, y - trunkHeight * 0.45),
-        width: trunkWidth,
-        height: trunkHeight,
+      _paintSingleTree(
+        canvas,
+        x,
+        y,
+        trunkWidth,
+        trunkHeight,
+        p,
+        bottomY,
+        i,
+        horizonY,
       );
-
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(trunkRect, Radius.circular(trunkWidth * 0.18)),
-        bark,
-      );
-
-      canvas.drawRect(
-        Rect.fromLTWH(
-          trunkRect.left + trunkWidth * 0.18,
-          trunkRect.top,
-          trunkWidth * 0.12,
-          trunkHeight,
-        ),
-        barkDark,
-      );
-
-      canvas.drawRect(
-        Rect.fromLTWH(
-          trunkRect.left + trunkWidth * 0.58,
-          trunkRect.top,
-          trunkWidth * 0.10,
-          trunkHeight,
-        ),
-        barkDark,
-      );
-
-      if (i.isEven) {
-        canvas.drawOval(
-          Rect.fromCenter(
-            center: Offset(x, trunkRect.top + trunkHeight * 0.28),
-            width: trunkWidth * 0.92,
-            height: trunkHeight * 0.14,
-          ),
-          moss,
-        );
-      }
     }
+  }
+
+  void _paintSingleTree(
+    Canvas canvas,
+    double x,
+    double y,
+    double trunkWidth,
+    double trunkHeight,
+    double p,
+    double bottomY,
+    int i,
+    double horizonY,
+  ) {
+    final bark = Paint()
+      ..color = GameConfig.redwoodMid.withValues(
+        alpha: lerpDoubleValue(0.18, 0.98, p),
+      );
+    final barkDark = Paint()
+      ..color = GameConfig.redwoodDark.withValues(
+        alpha: lerpDoubleValue(0.16, 0.90, p),
+      );
+    final moss = Paint()
+      ..color = const Color(
+        0xFF284A2C,
+      ).withValues(alpha: lerpDoubleValue(0.06, 0.34, p));
+    final rootShadow = Paint()
+      ..color = Colors.black.withValues(alpha: lerpDoubleValue(0.03, 0.16, p));
+
+    final trunkRect = Rect.fromCenter(
+      center: Offset(x, y - trunkHeight * 0.45),
+      width: trunkWidth,
+      height: trunkHeight,
+    );
+
+    // Hide more of far trees behind the distant tree line.
+    final hideAmount = lerpDoubleValue(14.0, 0.0, p);
+    final visibleTop = math.max(trunkRect.top + hideAmount, horizonY - 2);
+
+    final visibleRect = Rect.fromLTRB(
+      trunkRect.left,
+      visibleTop,
+      trunkRect.right,
+      trunkRect.bottom,
+    );
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(visibleRect, Radius.circular(trunkWidth * 0.18)),
+      bark,
+    );
+
+    canvas.drawRect(
+      Rect.fromLTWH(
+        visibleRect.left + trunkWidth * 0.18,
+        visibleRect.top,
+        trunkWidth * 0.12,
+        visibleRect.height,
+      ),
+      barkDark,
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(
+        visibleRect.left + trunkWidth * 0.58,
+        visibleRect.top,
+        trunkWidth * 0.10,
+        visibleRect.height,
+      ),
+      barkDark,
+    );
+
+    if (i.isEven && visibleRect.height > trunkHeight * 0.2) {
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset(x, visibleRect.top + visibleRect.height * 0.25),
+          width: trunkWidth * 0.95,
+          height: visibleRect.height * 0.14,
+        ),
+        moss,
+      );
+    }
+
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(x, trunkRect.bottom - trunkWidth * 0.10),
+        width: trunkWidth * 1.65,
+        height: trunkWidth * 0.42,
+      ),
+      rootShadow,
+    );
+
+    final rootPaint = Paint()
+      ..color = GameConfig.redwoodDark.withValues(
+        alpha: lerpDoubleValue(0.14, 0.55, p),
+      );
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(
+          center: Offset(x - trunkWidth * 0.34, trunkRect.bottom - 1),
+          width: trunkWidth * 0.42,
+          height: trunkWidth * 0.18,
+        ),
+        Radius.circular(trunkWidth * 0.05),
+      ),
+      rootPaint,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(
+          center: Offset(x + trunkWidth * 0.34, trunkRect.bottom - 1),
+          width: trunkWidth * 0.42,
+          height: trunkWidth * 0.18,
+        ),
+        Radius.circular(trunkWidth * 0.05),
+      ),
+      rootPaint,
+    );
+
+    if (p > 0.58) {
+      final groundContact = Paint()
+        ..color = Colors.black.withValues(alpha: 0.10 * p);
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset(x, bottomY - 4),
+          width: trunkWidth * 1.35,
+          height: trunkWidth * 0.32,
+        ),
+        groundContact,
+      );
+    }
+  }
+
+  void _paintDepthShade(Canvas canvas, Size size, double horizonY) {
+    final depthShade = Paint()
+      ..shader =
+          LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.black.withValues(alpha: 0.00),
+              Colors.black.withValues(alpha: 0.05),
+              Colors.black.withValues(alpha: 0.10),
+            ],
+          ).createShader(
+            Rect.fromLTWH(0, horizonY - 4, size.width, size.height * 0.30),
+          );
+
+    canvas.drawRect(
+      Rect.fromLTWH(0, horizonY - 4, size.width, size.height * 0.30),
+      depthShade,
+    );
   }
 
   void _paintEnemies(Canvas canvas, Size size) {
@@ -314,132 +601,240 @@ class RedwoodPainter extends CustomPainter {
       ..sort((a, b) => b.distance.compareTo(a.distance));
 
     for (final enemy in sorted) {
+      final emergence =
+          ((GameConfig.enemyStartDistanceMax - enemy.distance) / 7.0).clamp(
+            0.0,
+            1.0,
+          );
+      if (emergence <= 0.02) continue;
+
       final x = worldXToScreen(enemy.x - playerX, enemy.distance, size);
       final y = enemyScreenY(enemy.distance, size);
       final r = enemyRadius(enemy.distance) * enemy.radiusScale;
 
-      final fog = (1.0 - (enemy.distance / GameConfig.enemyStartDistanceMax))
-          .clamp(0.30, 1.0);
+      final depthFade =
+          (1.0 - (enemy.distance / GameConfig.enemyStartDistanceMax)).clamp(
+            0.22,
+            1.0,
+          );
+      final visibility = (depthFade * emergence).clamp(0.0, 1.0);
 
-      final shadowPaint = Paint()
-        ..color = Colors.black.withValues(alpha: 0.12 * fog);
-
-      canvas.drawOval(
-        Rect.fromCenter(
-          center: Offset(x, y + r * 1.25),
-          width: r * 1.15,
-          height: r * 0.32,
-        ),
-        shadowPaint,
-      );
-
-      final bodyPaint = Paint()
-        ..color = enemy.alive
-            ? enemy.tint.withValues(alpha: fog)
-            : Colors.white.withValues(alpha: enemy.flash.clamp(0.0, 1.0));
-
-      final darkPaint = Paint()
-        ..color = const Color(0xFF7A848D).withValues(alpha: fog);
-      final eyePaint = Paint()..color = Colors.redAccent.withValues(alpha: fog);
-      final limbPaint = Paint()
-        ..color = const Color(0xFF8C979F).withValues(alpha: fog)
-        ..strokeWidth = math.max(2.0, r * 0.10)
-        ..strokeCap = StrokeCap.round;
-
-      final headPath = Path()
-        ..moveTo(x, y - r * 1.38)
-        ..lineTo(x - r * 0.42, y - r * 0.74)
-        ..lineTo(x + r * 0.42, y - r * 0.74)
-        ..close();
-      canvas.drawPath(headPath, bodyPaint);
-
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromCenter(
-            center: Offset(x, y - r * 0.92),
-            width: r * 0.42,
-            height: r * 0.10,
-          ),
-          Radius.circular(r * 0.03),
-        ),
-        darkPaint,
-      );
-
-      canvas.drawCircle(Offset(x - r * 0.10, y - r * 0.92), r * 0.04, eyePaint);
-      canvas.drawCircle(Offset(x + r * 0.10, y - r * 0.92), r * 0.04, eyePaint);
-
-      final torsoPath = Path()
-        ..moveTo(x, y - r * 0.52)
-        ..lineTo(x - r * 0.54, y - r * 0.10)
-        ..lineTo(x - r * 0.36, y + r * 0.76)
-        ..lineTo(x + r * 0.36, y + r * 0.76)
-        ..lineTo(x + r * 0.54, y - r * 0.10)
-        ..close();
-      canvas.drawPath(torsoPath, bodyPaint);
-
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromCenter(
-            center: Offset(x, y + r * 0.10),
-            width: r * 0.22,
-            height: r * 0.58,
-          ),
-          Radius.circular(r * 0.05),
-        ),
-        darkPaint,
-      );
-
-      canvas.drawLine(
-        Offset(x - r * 0.34, y - r * 0.04),
-        Offset(x - r * 0.96, y + r * 0.28),
-        limbPaint,
-      );
-      canvas.drawLine(
-        Offset(x + r * 0.34, y - r * 0.04),
-        Offset(x + r * 0.96, y + r * 0.28),
-        limbPaint,
-      );
-
-      canvas.drawLine(
-        Offset(x - r * 0.18, y + r * 0.70),
-        Offset(x - r * 0.42, y + r * 1.34),
-        limbPaint,
-      );
-      canvas.drawLine(
-        Offset(x + r * 0.18, y + r * 0.70),
-        Offset(x + r * 0.42, y + r * 1.34),
-        limbPaint,
-      );
-
-      if (enemy.maxHealth > 1 && enemy.alive) {
-        final bg = Paint()..color = Colors.black.withValues(alpha: 0.45);
-        final fg = Paint()..color = Colors.redAccent.withValues(alpha: fog);
-        final width = r * 1.0;
-        final left = x - width / 2;
-        final top = y - r * 1.70;
-
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(
-            Rect.fromLTWH(left, top, width, 6),
-            const Radius.circular(3),
-          ),
-          bg,
-        );
-
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(
-            Rect.fromLTWH(
-              left,
-              top,
-              width * (enemy.health / enemy.maxHealth),
-              6,
-            ),
-            const Radius.circular(3),
-          ),
-          fg,
-        );
-      }
+      _paintEnemyShadow(canvas, x, y, r, visibility);
+      _paintDroid(canvas, enemy, x, y, r, visibility);
+      _paintEnemyHealth(canvas, enemy, x, y, r, visibility);
     }
+  }
+
+  void _paintEnemyShadow(
+    Canvas canvas,
+    double x,
+    double y,
+    double r,
+    double vis,
+  ) {
+    final shadowPaint = Paint()
+      ..color = Colors.black.withValues(alpha: 0.14 * vis);
+
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(x, y + r * 1.26),
+        width: r * 1.24,
+        height: r * 0.34,
+      ),
+      shadowPaint,
+    );
+  }
+
+  void _paintDroid(
+    Canvas canvas,
+    Enemy enemy,
+    double x,
+    double y,
+    double r,
+    double vis,
+  ) {
+    final bodyPaint = Paint()
+      ..color = enemy.alive
+          ? enemy.tint.withValues(alpha: vis)
+          : Colors.white.withValues(alpha: enemy.flash.clamp(0.0, 1.0));
+
+    final darkPaint = Paint()
+      ..color = const Color(0xFF69747C).withValues(alpha: vis);
+    final eyePaint = Paint()..color = Colors.redAccent.withValues(alpha: vis);
+    final limbPaint = Paint()
+      ..color = const Color(0xFF88949D).withValues(alpha: vis)
+      ..strokeWidth = math.max(2.0, r * 0.10)
+      ..strokeCap = StrokeCap.round;
+
+    final bool isBoss = enemy.type == EnemyType.boss;
+    final bool isHeavy = enemy.type == EnemyType.heavy;
+
+    final headW = isBoss
+        ? r * 1.02
+        : isHeavy
+        ? r * 0.90
+        : r * 0.82;
+    final headH = isBoss ? r * 0.56 : r * 0.48;
+    final torsoW = isBoss
+        ? r * 1.18
+        : isHeavy
+        ? r * 1.02
+        : r * 0.90;
+    final torsoH = isBoss
+        ? r * 1.52
+        : isHeavy
+        ? r * 1.34
+        : r * 1.18;
+
+    final headRect = Rect.fromCenter(
+      center: Offset(x, y - r * 0.96),
+      width: headW,
+      height: headH,
+    );
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(headRect, Radius.circular(r * 0.10)),
+      darkPaint,
+    );
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(
+          center: Offset(x, y - r * 0.96),
+          width: headW * 0.82,
+          height: r * 0.16,
+        ),
+        Radius.circular(r * 0.04),
+      ),
+      Paint()..color = const Color(0xFF1A2228).withValues(alpha: vis),
+    );
+
+    canvas.drawCircle(Offset(x - r * 0.14, y - r * 0.96), r * 0.05, eyePaint);
+    canvas.drawCircle(Offset(x + r * 0.14, y - r * 0.96), r * 0.05, eyePaint);
+
+    final torso = RRect.fromRectAndRadius(
+      Rect.fromCenter(
+        center: Offset(x, y + r * 0.12),
+        width: torsoW,
+        height: torsoH,
+      ),
+      Radius.circular(r * 0.10),
+    );
+    canvas.drawRRect(torso, bodyPaint);
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(
+          center: Offset(x, y + r * 0.10),
+          width: torsoW * 0.22,
+          height: torsoH * 0.74,
+        ),
+        Radius.circular(r * 0.04),
+      ),
+      darkPaint,
+    );
+
+    final shoulderY = y - r * 0.26;
+    canvas.drawLine(
+      Offset(x - torsoW * 0.32, shoulderY),
+      Offset(x - torsoW * 0.94, y + r * 0.18),
+      limbPaint,
+    );
+    canvas.drawLine(
+      Offset(x + torsoW * 0.32, shoulderY),
+      Offset(x + torsoW * 0.94, y + r * 0.18),
+      limbPaint,
+    );
+
+    final hipY = y + torsoH * 0.42;
+    canvas.drawLine(
+      Offset(x - torsoW * 0.16, hipY),
+      Offset(x - torsoW * 0.35, y + r * 1.34),
+      limbPaint,
+    );
+    canvas.drawLine(
+      Offset(x + torsoW * 0.16, hipY),
+      Offset(x + torsoW * 0.35, y + r * 1.34),
+      limbPaint,
+    );
+
+    if (isHeavy || isBoss) {
+      final armor = Paint()
+        ..color = const Color(0xFFCCB46A).withValues(alpha: vis * 0.95);
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(x - torsoW * 0.37, y - r * 0.12),
+            width: r * 0.24,
+            height: r * 0.20,
+          ),
+          Radius.circular(r * 0.04),
+        ),
+        armor,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(x + torsoW * 0.37, y - r * 0.12),
+            width: r * 0.24,
+            height: r * 0.20,
+          ),
+          Radius.circular(r * 0.04),
+        ),
+        armor,
+      );
+    }
+
+    if (isBoss) {
+      final crown = Paint()
+        ..color = const Color(0xFFFFC36E).withValues(alpha: vis * 0.95);
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(x, y - r * 1.28),
+            width: r * 0.72,
+            height: r * 0.14,
+          ),
+          Radius.circular(r * 0.04),
+        ),
+        crown,
+      );
+    }
+  }
+
+  void _paintEnemyHealth(
+    Canvas canvas,
+    Enemy enemy,
+    double x,
+    double y,
+    double r,
+    double vis,
+  ) {
+    if (enemy.maxHealth <= 1 || !enemy.alive) return;
+
+    final bg = Paint()..color = Colors.black.withValues(alpha: 0.40);
+    final fg = Paint()..color = Colors.redAccent.withValues(alpha: vis);
+    final width = r * 1.04;
+    final left = x - width / 2;
+    final top = y - r * 1.76;
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(left, top, width, 6),
+        const Radius.circular(3),
+      ),
+      bg,
+    );
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(left, top, width * (enemy.health / enemy.maxHealth), 6),
+        const Radius.circular(3),
+      ),
+      fg,
+    );
   }
 
   void _paintEnemyProjectiles(Canvas canvas, Size size) {
@@ -487,25 +882,25 @@ class RedwoodPainter extends CustomPainter {
     final c = crosshairPosition;
 
     final glowPaint = Paint()
-      ..color = GameConfig.accent.withValues(alpha: 0.12)
+      ..color = GameConfig.accent.withValues(alpha: 0.16)
       ..style = PaintingStyle.fill;
-    canvas.drawCircle(c, 24, glowPaint);
+    canvas.drawCircle(c, 20, glowPaint);
 
     final ringPaint = Paint()
-      ..color = GameConfig.accent.withValues(alpha: 0.92)
-      ..strokeWidth = 2
+      ..color = GameConfig.accent.withValues(alpha: 1.0)
+      ..strokeWidth = 2.3
       ..style = PaintingStyle.stroke;
 
-    canvas.drawCircle(c, 14, ringPaint);
-    canvas.drawLine(Offset(c.dx - 22, c.dy), Offset(c.dx - 8, c.dy), ringPaint);
-    canvas.drawLine(Offset(c.dx + 8, c.dy), Offset(c.dx + 22, c.dy), ringPaint);
-    canvas.drawLine(Offset(c.dx, c.dy - 22), Offset(c.dx, c.dy - 8), ringPaint);
-    canvas.drawLine(Offset(c.dx, c.dy + 8), Offset(c.dx, c.dy + 22), ringPaint);
+    canvas.drawCircle(c, 12, ringPaint);
+    canvas.drawLine(Offset(c.dx - 18, c.dy), Offset(c.dx - 6, c.dy), ringPaint);
+    canvas.drawLine(Offset(c.dx + 6, c.dy), Offset(c.dx + 18, c.dy), ringPaint);
+    canvas.drawLine(Offset(c.dx, c.dy - 18), Offset(c.dx, c.dy - 6), ringPaint);
+    canvas.drawLine(Offset(c.dx, c.dy + 6), Offset(c.dx, c.dy + 18), ringPaint);
 
     final centerDot = Paint()
-      ..color = GameConfig.accent.withValues(alpha: 0.98)
+      ..color = GameConfig.accent.withValues(alpha: 1.0)
       ..style = PaintingStyle.fill;
-    canvas.drawCircle(c, 2.4, centerDot);
+    canvas.drawCircle(c, 3.0, centerDot);
   }
 
   void _paintWeapon(Canvas canvas, Size size) {
