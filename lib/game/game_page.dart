@@ -24,16 +24,9 @@ class _GamePageState extends State<GamePage>
   Duration _lastTick = Duration.zero;
   final math.Random _rng = math.Random();
 
-  // ============================================================
-  // HACKABLE: visible version label on launch screen
-  // ============================================================
   static const String appVersion = 'v1.0.0';
 
   GameState state = GameState.menu;
-
-  // ============================================================
-  // HACKABLE: selected difficulty
-  // ============================================================
   DifficultyMode selectedDifficulty = DifficultyMode.medium;
 
   int score = 0;
@@ -41,9 +34,6 @@ class _GamePageState extends State<GamePage>
   double survivalTime = 0.0;
   double fireCooldownTimer = 0.0;
 
-  // ============================================================
-  // HACKABLE: player/world state
-  // ============================================================
   double playerX = 0.0;
   double aimX = 0.0;
   double aimY = 0.0;
@@ -61,10 +51,6 @@ class _GamePageState extends State<GamePage>
   Rect fireButtonRect = Rect.zero;
   Rect pauseButtonRect = Rect.zero;
 
-  // ============================================================
-  // HACKABLE: screen/orientation tracking
-  // Used to reset live touch controls cleanly on rotation.
-  // ============================================================
   Size _lastLayoutSize = Size.zero;
   bool _lastLandscape = false;
 
@@ -109,12 +95,6 @@ class _GamePageState extends State<GamePage>
     }
   }
 
-  // ============================================================
-  // HACKABLE: starting health by difficulty
-  // Easy = 5
-  // Medium = current config maxHealth
-  // Hard = 1
-  // ============================================================
   int _startingHealthForDifficulty() {
     switch (selectedDifficulty) {
       case DifficultyMode.easy:
@@ -191,7 +171,6 @@ class _GamePageState extends State<GamePage>
   }
 
   void _updateGame(double dt) {
-    // HACKABLE: how fast player moves forward
     worldZ += dt * 1.0;
     survivalTime += dt;
     fireCooldownTimer = math.max(0.0, fireCooldownTimer - dt);
@@ -227,11 +206,6 @@ class _GamePageState extends State<GamePage>
     }
   }
 
-  // ============================================================
-  // HACKABLE: thumbstick feel
-  // Fixed-base sticks with a deadzone.
-  // This keeps the on-screen controls from sliding around.
-  // ============================================================
   void _updateControls(double dt) {
     double moveInput = 0.0;
     double aimInputX = 0.0;
@@ -339,9 +313,6 @@ class _GamePageState extends State<GamePage>
     }
   }
 
-  // ============================================================
-  // HACKABLE: wave compositions
-  // ============================================================
   WavePlan _buildWave(int waveNumber) {
     switch (waveNumber) {
       case 1:
@@ -491,10 +462,6 @@ class _GamePageState extends State<GamePage>
     }
   }
 
-  // ============================================================
-  // HACKABLE: enemy stats by type
-  // Hard mode boss bonus: boss health += currentWave
-  // ============================================================
   void _spawnEnemy(EnemyType type) {
     final distance =
         _rng.nextDouble() *
@@ -538,8 +505,8 @@ class _GamePageState extends State<GamePage>
         hp = currentWave >= 10
             ? 8
             : currentWave >= 6
-            ? 6
-            : 5;
+                ? 6
+                : 5;
 
         if (_hardModeBossBonus) {
           hp += currentWave;
@@ -622,10 +589,6 @@ class _GamePageState extends State<GamePage>
     enemies.removeWhere(dead.contains);
   }
 
-  // ============================================================
-  // HACKABLE: enemy projectile behavior
-  // Projectile position is stored in WORLD SPACE.
-  // ============================================================
   void _updateEnemyShooting(Enemy enemy, double dt) {
     enemy.shootCooldown -= dt;
     if (enemy.shootCooldown > 0) return;
@@ -732,9 +695,6 @@ class _GamePageState extends State<GamePage>
     traces.removeWhere((t) => t.life <= 0);
   }
 
-  // ============================================================
-  // HACKABLE: hit test and scoring rules
-  // ============================================================
   void _fire(Size size) {
     if (state != GameState.playing) return;
     if (fireCooldownTimer > 0) return;
@@ -792,10 +752,10 @@ class _GamePageState extends State<GamePage>
         score += bestTarget.type == EnemyType.boss
             ? 12
             : bestTarget.type == EnemyType.heavy
-            ? 4
-            : bestTarget.type == EnemyType.scout
-            ? 2
-            : 1;
+                ? 4
+                : bestTarget.type == EnemyType.scout
+                    ? 2
+                    : 1;
       }
     }
   }
@@ -945,8 +905,6 @@ class _GamePageState extends State<GamePage>
 
           final isLandscape = size.width > size.height;
 
-          // Reset active touch controls if layout/orientation changed.
-          // This prevents weird behavior after rotating during gameplay.
           if (_lastLayoutSize != size || _lastLandscape != isLandscape) {
             moveStick.stop();
             aimStick.stop();
@@ -963,6 +921,7 @@ class _GamePageState extends State<GamePage>
             child: Stack(
               children: [
                 CustomPaint(
+                  size: size,
                   painter: RedwoodPainter(
                     size: size,
                     enemies: enemies,
@@ -974,18 +933,17 @@ class _GamePageState extends State<GamePage>
                     state: state,
                     currentWave: currentWave,
                     firePressed: firePressed,
-                    // bossHealth: _currentBossHealth,
-                    // bossMaxHealth: _currentBossMaxHealth,
-                    //worldXToScreen: _worldXToScreen,
-                    //enemyScreenY: _enemyScreenY,
-                    // enemyRadius: _enemyRadius,
+                    bossHealth: _currentBossHealth,
+                    bossMaxHealth: _currentBossMaxHealth,
+                    worldXToScreen: _worldXToScreen,
+                    enemyScreenY: _enemyScreenY,
+                    enemyRadius: _enemyRadius,
                     crosshairPosition: _crosshairScreenPosition(size),
                     isTraveling: false,
                     travelProgress: 0.0,
                     travelTurn: 0.0,
                   ),
                 ),
-
                 if (state == GameState.playing || state == GameState.paused)
                   _buildHud(size),
                 if (bannerText.isNotEmpty &&
@@ -1008,10 +966,6 @@ class _GamePageState extends State<GamePage>
     final bool isLandscape = size.width > size.height;
     final double hudScale = isTablet ? 1.18 : 1.0;
 
-    // ============================================================
-    // HACKABLE: default stick positions by screen shape
-    // Portrait and landscape use different layouts.
-    // ============================================================
     final leftCenter = Offset(
       isLandscape ? 95 * hudScale : 85 * hudScale,
       size.height - (isTablet ? 120 : 95),
