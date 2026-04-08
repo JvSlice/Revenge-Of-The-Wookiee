@@ -488,7 +488,7 @@ class _GamePageState extends State<GamePage>
             EnemyType.boss,
           ],
         );
-      }
+    }
   }
 
   // ============================================================
@@ -538,8 +538,8 @@ class _GamePageState extends State<GamePage>
         hp = currentWave >= 10
             ? 8
             : currentWave >= 6
-                ? 6
-                : 5;
+            ? 6
+            : 5;
 
         if (_hardModeBossBonus) {
           hp += currentWave;
@@ -792,10 +792,10 @@ class _GamePageState extends State<GamePage>
         score += bestTarget.type == EnemyType.boss
             ? 12
             : bestTarget.type == EnemyType.heavy
-                ? 4
-                : bestTarget.type == EnemyType.scout
-                    ? 2
-                    : 1;
+            ? 4
+            : bestTarget.type == EnemyType.scout
+            ? 2
+            : 1;
       }
     }
   }
@@ -964,27 +964,28 @@ class _GamePageState extends State<GamePage>
               children: [
                 CustomPaint(
                   painter: RedwoodPainter(
-  size: size,
-  enemies: enemies,
-  enemyProjectiles: enemyProjectiles,
-  traces: traces,
-  playerX: playerX,
-  bobTime: bobTime,
-  worldZ: worldZ,
-  state: state,
-  currentWave: currentWave,
-  firePressed: firePressed,
-  bossHealth: _currentBossHealth,
-  bossMaxHealth: _currentBossMaxHealth,
-  worldXToScreen: _worldXToScreen,
-  enemyScreenY: _enemyScreenY,
-  enemyRadius: _enemyRadius,
-  crosshairPosition: _crosshairScreenPosition(size),
-  isTraveling: false,
-  travelProgress: 0.0,
-  travelTurn: 0.0,
-),
-                  
+                    size: size,
+                    enemies: enemies,
+                    enemyProjectiles: enemyProjectiles,
+                    traces: traces,
+                    playerX: playerX,
+                    bobTime: bobTime,
+                    worldZ: worldZ,
+                    state: state,
+                    currentWave: currentWave,
+                    firePressed: firePressed,
+                    // bossHealth: _currentBossHealth,
+                    // bossMaxHealth: _currentBossMaxHealth,
+                    //worldXToScreen: _worldXToScreen,
+                    //enemyScreenY: _enemyScreenY,
+                    // enemyRadius: _enemyRadius,
+                    crosshairPosition: _crosshairScreenPosition(size),
+                    isTraveling: false,
+                    travelProgress: 0.0,
+                    travelTurn: 0.0,
+                  ),
+                ),
+
                 if (state == GameState.playing || state == GameState.paused)
                   _buildHud(size),
                 if (bannerText.isNotEmpty &&
