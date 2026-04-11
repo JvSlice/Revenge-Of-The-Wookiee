@@ -108,6 +108,7 @@ class _GamePageState extends State<GamePage>
 
   bool get _enemyProjectilesEnabled =>
       selectedDifficulty != DifficultyMode.easy;
+
   bool get _hardModeBossBonus => selectedDifficulty == DifficultyMode.hard;
 
   void _startGame() {
@@ -122,20 +123,26 @@ class _GamePageState extends State<GamePage>
       aimY = 0.0;
       bobTime = 0.0;
       worldZ = 0.0;
+
       enemies.clear();
       enemyProjectiles.clear();
       traces.clear();
+
       moveStick.stop();
       aimStick.stop();
       firePressed = false;
+
       currentWave = 0;
       betweenWaves = false;
       betweenWaveTimer = 0.0;
+
       activeWave = null;
       waveSpawnIndex = 0;
       waveSpawnTimer = 0.0;
+
       bannerText = '';
       bannerTimer = 0.0;
+
       _beginNextWave();
       _lastTick = Duration.zero;
     });
@@ -505,8 +512,8 @@ class _GamePageState extends State<GamePage>
         hp = currentWave >= 10
             ? 8
             : currentWave >= 6
-                ? 6
-                : 5;
+            ? 6
+            : 5;
 
         if (_hardModeBossBonus) {
           hp += currentWave;
@@ -752,10 +759,10 @@ class _GamePageState extends State<GamePage>
         score += bestTarget.type == EnemyType.boss
             ? 12
             : bestTarget.type == EnemyType.heavy
-                ? 4
-                : bestTarget.type == EnemyType.scout
-                    ? 2
-                    : 1;
+            ? 4
+            : bestTarget.type == EnemyType.scout
+            ? 2
+            : 1;
       }
     }
   }
