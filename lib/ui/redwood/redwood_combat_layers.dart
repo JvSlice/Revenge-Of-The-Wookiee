@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../config/game_config.dart';
 import '../../game/game_render_data.dart';
 import '../../models/enemy.dart';
+import '../../models/game_types.dart';
 
 double travelAimOffsetX(GameRenderData data) {
   return data.isTraveling ? data.travelTurn * 16.0 : 0.0;
@@ -21,7 +22,11 @@ void paintEnemies(Canvas canvas, GameRenderData data) {
         );
     if (emergence <= 0.02) continue;
 
-    final x = data.worldXToScreen(enemy.x - data.playerX, enemy.distance, data.size);
+    final x = data.worldXToScreen(
+      enemy.x - data.playerX,
+      enemy.distance,
+      data.size,
+    );
     final y = data.enemyScreenY(enemy.distance, data.size);
     final r = data.enemyRadius(enemy.distance) * enemy.radiusScale;
 
@@ -38,7 +43,13 @@ void paintEnemies(Canvas canvas, GameRenderData data) {
   }
 }
 
-void _paintEnemyShadow(Canvas canvas, double x, double y, double r, double vis) {
+void _paintEnemyShadow(
+  Canvas canvas,
+  double x,
+  double y,
+  double r,
+  double vis,
+) {
   final shadowPaint = Paint()
     ..color = Colors.black.withValues(alpha: 0.16 * vis);
 
@@ -79,19 +90,19 @@ void _paintDroid(
   final headW = isBoss
       ? r * 1.02
       : isHeavy
-          ? r * 0.90
-          : r * 0.82;
+      ? r * 0.90
+      : r * 0.82;
   final headH = isBoss ? r * 0.56 : r * 0.48;
   final torsoW = isBoss
       ? r * 1.18
       : isHeavy
-          ? r * 1.02
-          : r * 0.90;
+      ? r * 1.02
+      : r * 0.90;
   final torsoH = isBoss
       ? r * 1.52
       : isHeavy
-          ? r * 1.34
-          : r * 1.18;
+      ? r * 1.34
+      : r * 1.18;
 
   final headRect = Rect.fromCenter(
     center: Offset(x, y - r * 0.96),
@@ -254,9 +265,8 @@ void paintEnemyProjectiles(Canvas canvas, GameRenderData data) {
     final screenY = data.enemyScreenY(projectile.position.dy, data.size);
 
     final glow = Paint()
-      ..color =
-          (projectile.isBossShot ? Colors.orangeAccent : Colors.redAccent)
-              .withValues(alpha: 0.22)
+      ..color = (projectile.isBossShot ? Colors.orangeAccent : Colors.redAccent)
+          .withValues(alpha: 0.22)
       ..style = PaintingStyle.fill;
 
     final core = Paint()
