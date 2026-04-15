@@ -75,7 +75,7 @@ class RedwoodPainter extends CustomPainter {
   }
 
   double _travelShift(Size size) {
-    // HACKABLE: turn visual strength only
+    // HACKABLE: visual turn strength only
     return _travelCurveAmount() * size.width * 0.11;
   }
 
@@ -247,7 +247,7 @@ class RedwoodPainter extends CustomPainter {
     final horizonY = size.height * 0.402;
     final corridorBottom = size.height;
 
-    // HACKABLE: major composition squeeze
+    // HACKABLE: composition squeeze
     final corridorHalfTop = size.width * 0.058;
     final corridorHalfBottom = size.width * 0.385;
     final shift = (-playerX * 22) + _travelShift(size);
@@ -322,6 +322,17 @@ class RedwoodPainter extends CustomPainter {
 
     canvas.drawPath(trail, trailPaint);
 
+    _paintTrailBaseTexture(
+      canvas,
+      size,
+      trail: trail,
+      horizonY: horizonY,
+      bottomY: corridorBottom,
+      corridorHalfTop: corridorHalfTop,
+      corridorHalfBottom: corridorHalfBottom,
+      shift: shift,
+    );
+
     _paintTrailLighting(
       canvas,
       size,
@@ -353,6 +364,16 @@ class RedwoodPainter extends CustomPainter {
       shift: shift,
     );
 
+    _paintPathEdgeLeafLitter(
+      canvas,
+      size,
+      horizonY: horizonY,
+      bottomY: corridorBottom,
+      corridorHalfTop: corridorHalfTop,
+      corridorHalfBottom: corridorHalfBottom,
+      shift: shift,
+    );
+
     _paintRedwoodColumns(canvas, size, true, horizonY, corridorBottom, shift);
     _paintRedwoodColumns(canvas, size, false, horizonY, corridorBottom, shift);
   }
@@ -368,6 +389,7 @@ class RedwoodPainter extends CustomPainter {
     final trunkPaint = Paint();
     final shadowPaint = Paint();
     final shrubPaint = Paint();
+    final leafPaint = Paint();
 
     for (int i = 0; i < 8; i++) {
       final t = i / 7.0;
@@ -432,7 +454,145 @@ class RedwoodPainter extends CustomPainter {
         ),
         shrubPaint,
       );
+
+      // HACKABLE: low leaf clusters / undergrowth accents
+      leafPaint.color = const Color(0xFF6B5A2E).withValues(
+        alpha: (0.10 + t * 0.12).clamp(0.0, 1.0),
+      );
+      for (int j = 0; j < 3; j++) {
+        final xo = (j - 1) * trunkW * 0.22;
+        final yo = trunkH * (0.01 + j * 0.012);
+        canvas.drawOval(
+          Rect.fromCenter(
+            center: Offset(
+              x + xo + (left ? trunkW * 0.14 : -trunkW * 0.14),
+              trunkRect.bottom - yo,
+            ),
+            width: trunkW * 0.24,
+            height: trunkW * 0.11,
+          ),
+          leafPaint,
+        );
+      }
     }
+  }
+
+  void _paintTrailBaseTexture(
+    Canvas canvas,
+    Size size, {
+    required Path trail,
+    required double horizonY,
+    required double bottomY,
+    required double corridorHalfTop,
+    required double corridorHalfBottom,
+    required double shift,
+  }) {
+    canvas.save();
+    canvas.clipPath(trail);
+
+    // HACKABLE: center wear strip
+    final centerWear = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          const Color(0xFFFFC67B).withValues(alpha: 0.03),
+          const Color(0xFFFFC67B).withValues(alpha: 0.10),
+          const Color(0xFFFFC67B).withValues(alpha: 0.06),
+        ],
+        stops: const [0.0, 0.65, 1.0],
+      ).createShader(
+        Rect.fromLTWH(
+          size.width * 0.42 + shift * 0.06,
+          horizonY,
+          size.width * 0.16,
+          bottomY - horizonY,
+        ),
+      );
+    canvas.drawRect(
+      Rect.fromLTWH(
+        size.width * 0.42 + shift * 0.06,
+        horizonY,
+        size.width * 0.16,
+        bottomY - horizonY,
+      ),
+      centerWear,
+    );
+
+    // HACKABLE: darker outer board edges
+    final edgeShadeLeft = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: [
+          Colors.black.withValues(alpha: 0.10),
+          Colors.transparent,
+        ],
+      ).createShader(
+        Rect.fromLTWH(
+          size.width / 2 - corridorHalfBottom + shift,
+          horizonY,
+          corridorHalfBottom * 0.34,
+          bottomY - horizonY,
+        ),
+      );
+    canvas.drawRect(
+      Rect.fromLTWH(
+        size.width / 2 - corridorHalfBottom + shift,
+        horizonY,
+        corridorHalfBottom * 0.34,
+        bottomY - horizonY,
+      ),
+      edgeShadeLeft,
+    );
+
+    final edgeShadeRight = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.centerRight,
+        end: Alignment.centerLeft,
+        colors: [
+          Colors.black.withValues(alpha: 0.10),
+          Colors.transparent,
+        ],
+      ).createShader(
+        Rect.fromLTWH(
+          size.width / 2 + corridorHalfBottom + shift - corridorHalfBottom * 0.34,
+          horizonY,
+          corridorHalfBottom * 0.34,
+          bottomY - horizonY,
+        ),
+      );
+    canvas.drawRect(
+      Rect.fromLTWH(
+        size.width / 2 + corridorHalfBottom + shift - corridorHalfBottom * 0.34,
+        horizonY,
+        corridorHalfBottom * 0.34,
+        bottomY - horizonY,
+      ),
+      edgeShadeRight,
+    );
+
+    // HACKABLE: plank variation bands
+    for (int i = 0; i < 9; i++) {
+      final t0 = i / 9;
+      final t1 = (i + 1) / 9;
+      final y0 = lerpDoubleValue(horizonY, bottomY, t0 * t0);
+      final y1 = lerpDoubleValue(horizonY, bottomY, t1 * t1);
+
+      final alpha = 0.018 + ((i % 2 == 0) ? 0.028 : 0.010);
+      final paint = Paint()
+        ..color = (i % 3 == 0
+                ? const Color(0xFFFFC07A)
+                : const Color(0xFF2A140E))
+            .withValues(alpha: alpha);
+
+      canvas.drawRect(
+        Rect.fromLTWH(0, y0, size.width, math.max(0.0, y1 - y0)),
+        paint,
+      );
+    }
+
+    canvas.restore();
   }
 
   void _paintTrailLighting(
@@ -529,12 +689,16 @@ class RedwoodPainter extends CustomPainter {
     required double shift,
   }) {
     final seamPaint = Paint()
-      ..color = Colors.black.withValues(alpha: 0.26)
-      ..strokeWidth = 1.35;
+      ..color = Colors.black.withValues(alpha: 0.30)
+      ..strokeWidth = 1.45;
 
     final seamHighlight = Paint()
-      ..color = const Color(0xFFFFBE75).withValues(alpha: 0.08)
-      ..strokeWidth = 0.8;
+      ..color = const Color(0xFFFFBE75).withValues(alpha: 0.09)
+      ..strokeWidth = 0.85;
+
+    final seamBleed = Paint()
+      ..color = const Color(0xFF1C0F0C).withValues(alpha: 0.08)
+      ..strokeWidth = 4.0;
 
     final seamScroll = _scrollLoop(1.0);
 
@@ -545,6 +709,11 @@ class RedwoodPainter extends CustomPainter {
       final y = lerpDoubleValue(horizonY, bottomY, t * t);
       final halfW = lerpDoubleValue(corridorHalfTop, corridorHalfBottom, t);
 
+      canvas.drawLine(
+        Offset(size.width / 2 - halfW + shift, y),
+        Offset(size.width / 2 + halfW + shift, y),
+        seamBleed,
+      );
       canvas.drawLine(
         Offset(size.width / 2 - halfW + shift, y),
         Offset(size.width / 2 + halfW + shift, y),
@@ -599,6 +768,75 @@ class RedwoodPainter extends CustomPainter {
       Offset(size.width / 2 + corridorHalfBottom + shift, bottomY),
       edgeShadow,
     );
+  }
+
+  void _paintPathEdgeLeafLitter(
+    Canvas canvas,
+    Size size, {
+    required double horizonY,
+    required double bottomY,
+    required double corridorHalfTop,
+    required double corridorHalfBottom,
+    required double shift,
+  }) {
+    final leafPaintA = Paint()
+      ..color = const Color(0xFF6E562D).withValues(alpha: 0.24);
+    final leafPaintB = Paint()
+      ..color = const Color(0xFF8A6434).withValues(alpha: 0.18);
+    final leafPaintC = Paint()
+      ..color = const Color(0xFF41512D).withValues(alpha: 0.20);
+
+    for (int i = 0; i < 18; i++) {
+      final t = 0.22 + (i / 20);
+      final y = lerpDoubleValue(horizonY, bottomY, t * t);
+      final halfW = lerpDoubleValue(corridorHalfTop, corridorHalfBottom, t);
+
+      final leftX = size.width / 2 - halfW + shift + 8 + (i % 3) * 6;
+      final rightX = size.width / 2 + halfW + shift - 8 - (i % 3) * 6;
+      final leafW = lerpDoubleValue(4, 18, t);
+      final leafH = lerpDoubleValue(2, 8, t);
+
+      final p = i % 3 == 0
+          ? leafPaintA
+          : (i % 3 == 1 ? leafPaintB : leafPaintC);
+
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset(leftX, y + (i.isEven ? 2 : -1)),
+          width: leafW,
+          height: leafH,
+        ),
+        p,
+      );
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset(rightX, y + (i.isEven ? -1 : 2)),
+          width: leafW,
+          height: leafH,
+        ),
+        p,
+      );
+
+      // A few leaves spill onto the boardwalk, but stay near edges
+      if (i % 4 == 0) {
+        canvas.drawOval(
+          Rect.fromCenter(
+            center: Offset(leftX + leafW * 0.9, y + 1),
+            width: leafW * 0.8,
+            height: leafH * 0.8,
+          ),
+          leafPaintB,
+        );
+        canvas.drawOval(
+          Rect.fromCenter(
+            center: Offset(rightX - leafW * 0.9, y - 1),
+            width: leafW * 0.8,
+            height: leafH * 0.8,
+          ),
+          leafPaintA,
+        );
+      }
+    }
   }
 
   void _paintRedwoodColumns(
