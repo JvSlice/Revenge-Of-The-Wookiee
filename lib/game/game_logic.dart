@@ -385,8 +385,8 @@ extension _GamePageLogic on _GamePageState {
         hp = currentWave >= 10
             ? 8
             : currentWave >= 6
-                ? 6
-                : 5;
+            ? 6
+            : 5;
 
         if (_hardModeBossBonus) {
           hp += currentWave;
@@ -632,10 +632,10 @@ extension _GamePageLogic on _GamePageState {
         score += bestTarget.type == EnemyType.boss
             ? 12
             : bestTarget.type == EnemyType.heavy
-                ? 4
-                : bestTarget.type == EnemyType.scout
-                    ? 2
-                    : 1;
+            ? 4
+            : bestTarget.type == EnemyType.scout
+            ? 2
+            : 1;
       }
     }
   }
