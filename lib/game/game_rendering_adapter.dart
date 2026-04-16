@@ -12,48 +12,47 @@ extension _GamePageRenderingAdapter on _GamePageState {
   }
 
   Widget _buildGamePainter(Size size) {
-  return SizedBox(
-    width: size.width,
-    height: size.height,
-    child: Stack(
-      fit: StackFit.expand,
-      children: [
-        Image.asset(
-          'assets/images/forrest_bg.png',
-          fit: BoxFit.cover,
-          alignment: Alignment.center,
-        ),
-
-        // Slight dim layer so gameplay still reads clearly.
-        Container(
-          color: Colors.black.withValues(alpha: 0.18),
-        ),
-
-        CustomPaint(
-          size: size,
-          painter: RedwoodPainter(
-            size: size,
-            enemies: enemies,
-            enemyProjectiles: enemyProjectiles,
-            traces: traces,
-            playerX: playerX,
-            bobTime: bobTime,
-            worldZ: worldZ,
-            state: state,
-            currentWave: currentWave,
-            firePressed: firePressed,
-            bossHealth: _currentBossHealth,
-            bossMaxHealth: _currentBossMaxHealth,
-            worldXToScreen: _worldXToScreen,
-            enemyScreenY: _enemyScreenY,
-            enemyRadius: _enemyRadius,
-            crosshairPosition: _crosshairScreenPosition(size),
-            isTraveling: false,
-            travelProgress: 0.0,
-            travelTurn: 0.0,
+    return SizedBox(
+      width: size.width,
+      height: size.height,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.asset(
+            'assets/images/forrest_bg.png',
+            fit: BoxFit.cover,
+            alignment: Alignment.center,
           ),
-        ),
-      ],
-    ),
-  );
+
+          // Slight dim layer so gameplay still reads clearly.
+          Container(color: Colors.black.withValues(alpha: 0.18)),
+
+          CustomPaint(
+            size: size,
+            painter: RedwoodPainter(
+              size: size,
+              enemies: enemies,
+              enemyProjectiles: enemyProjectiles,
+              traces: traces,
+              playerX: playerX,
+              bobTime: bobTime,
+              worldZ: worldZ,
+              state: state,
+              currentWave: currentWave,
+              firePressed: firePressed,
+              bossHealth: _currentBossHealth,
+              bossMaxHealth: _currentBossMaxHealth,
+              worldXToScreen: _worldXToScreen,
+              enemyScreenY: _enemyScreenY,
+              enemyRadius: _enemyRadius,
+              crosshairPosition: _crosshairScreenPosition(size),
+              isTraveling: false,
+              travelProgress: 0.0,
+              travelTurn: 0.0,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
