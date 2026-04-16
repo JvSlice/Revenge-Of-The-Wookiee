@@ -53,18 +53,19 @@ class RedwoodPainter extends CustomPainter {
   final double Function(double distance, Size size) enemyScreenY;
   final double Function(double distance) enemyRadius;
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    _paintBackground(canvas, size);
-    _paintRedwoodHallway(canvas, size);
-    _paintAtmosphere(canvas, size);
-    _paintEnemies(canvas, size);
-    _paintEnemyProjectiles(canvas, size);
-    _paintTraces(canvas);
-    _paintCrosshair(canvas);
-    _paintWeapon(canvas, size);
-    _paintBossHealthBar(canvas, size);
-  }
+ @override
+void paint(Canvas canvas, Size size) {
+  // Background image is now drawn behind this painter in the rendering adapter.
+  // So we do NOT paint the old procedural full-screen background here.
+  _paintRedwoodHallway(canvas, size);
+  _paintAtmosphere(canvas, size);
+  _paintEnemies(canvas, size);
+  _paintEnemyProjectiles(canvas, size);
+  _paintTraces(canvas);
+  _paintCrosshair(canvas);
+  _paintWeapon(canvas, size);
+  _paintBossHealthBar(canvas, size);
+}
 
   double _travelCurveAmount() {
     if (!isTraveling) return 0.0;
