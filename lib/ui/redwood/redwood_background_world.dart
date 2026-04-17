@@ -109,18 +109,18 @@ void paintForestWorld(Canvas canvas, GameRenderData data) {
     corridorBottomHalf,
   );
 
-  _paintGround(
-    canvas,
-    data,
-    horizonY,
-    bottomY,
-    tCenterX,
-    bCenterX,
-    corridorTopHalf,
-    corridorBottomHalf,
-  );
+  //_paintGround(
+  //canvas,
+  //data,
+  // horizonY,
+  // bottomY,
+  // tCenterX,
+  // bCenterX,
+  //  corridorTopHalf,
+  // corridorBottomHalf,
+  //);
 
-  _paintFarTreeLine(canvas, data, horizonY, tCenterX, corridorTopHalf);
+  //_paintFarTreeLine(canvas, data, horizonY, tCenterX, corridorTopHalf);
 
   _paintForestSide(
     canvas,
