@@ -177,29 +177,31 @@ void _paintSideGroundMass(
     ..close();
 
   final sideGroundPaint = Paint()
-    ..shader = const LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [Color(0xFF1C241E), Color(0xFF121710), Color(0xFF0A0B0A)],
-    ).createShader(
-      Rect.fromLTWH(0, horizonY, size.width, size.height - horizonY),
-    );
+    ..shader =
+        const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF1C241E), Color(0xFF121710), Color(0xFF0A0B0A)],
+        ).createShader(
+          Rect.fromLTWH(0, horizonY, size.width, size.height - horizonY),
+        );
 
-  canvas.drawPath(leftGround, sideGroundPaint);
-  canvas.drawPath(rightGround, sideGroundPaint);
+  //canvas.drawPath(leftGround, sideGroundPaint);
+  //canvas.drawPath(rightGround, sideGroundPaint);
 
   final sideWallShade = Paint()
-    ..shader = LinearGradient(
-      begin: Alignment.centerLeft,
-      end: Alignment.centerRight,
-      colors: [
-        Colors.black.withValues(alpha: 0.24),
-        Colors.transparent,
-        Colors.black.withValues(alpha: 0.24),
-      ],
-    ).createShader(
-      Rect.fromLTWH(0, horizonY, size.width, size.height - horizonY),
-    );
+    ..shader =
+        LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [
+            Colors.black.withValues(alpha: 0.24),
+            Colors.transparent,
+            Colors.black.withValues(alpha: 0.24),
+          ],
+        ).createShader(
+          Rect.fromLTWH(0, horizonY, size.width, size.height - horizonY),
+        );
 
   canvas.drawRect(
     Rect.fromLTWH(0, horizonY, size.width, size.height - horizonY),
@@ -227,28 +229,30 @@ void _paintGround(
     ..close();
 
   final groundPaint = Paint()
-    ..shader = const LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [Color(0xFF845432), Color(0xFF5A3923), Color(0xFF2C1B12)],
-    ).createShader(
-      Rect.fromLTWH(0, horizonY, size.width, size.height - horizonY),
-    );
+    ..shader =
+        const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF845432), Color(0xFF5A3923), Color(0xFF2C1B12)],
+        ).createShader(
+          Rect.fromLTWH(0, horizonY, size.width, size.height - horizonY),
+        );
 
   canvas.drawPath(groundPath, groundPaint);
 
   final centerGlow = Paint()
-    ..shader = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [
-        const Color(0xFFE6B57D).withValues(alpha: 0.04),
-        const Color(0xFFFFD59B).withValues(alpha: 0.09),
-        Colors.transparent,
-      ],
-    ).createShader(
-      Rect.fromLTWH(0, horizonY, size.width, size.height - horizonY),
-    );
+    ..shader =
+        LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            const Color(0xFFE6B57D).withValues(alpha: 0.04),
+            const Color(0xFFFFD59B).withValues(alpha: 0.09),
+            Colors.transparent,
+          ],
+        ).createShader(
+          Rect.fromLTWH(0, horizonY, size.width, size.height - horizonY),
+        );
 
   canvas.drawPath(groundPath, centerGlow);
 
@@ -383,14 +387,20 @@ void _paintFarTreeLine(
   final leftLine = Path()
     ..moveTo(0, horizonY + size.height * 0.01)
     ..lineTo(topCenterXValue - corridorTopHalf, horizonY)
-    ..lineTo(topCenterXValue - corridorTopHalf - size.width * 0.02, horizonY - 6)
+    ..lineTo(
+      topCenterXValue - corridorTopHalf - size.width * 0.02,
+      horizonY - 6,
+    )
     ..lineTo(0, horizonY - size.height * 0.02)
     ..close();
 
   final rightLine = Path()
     ..moveTo(size.width, horizonY + size.height * 0.01)
     ..lineTo(topCenterXValue + corridorTopHalf, horizonY)
-    ..lineTo(topCenterXValue + corridorTopHalf + size.width * 0.02, horizonY - 6)
+    ..lineTo(
+      topCenterXValue + corridorTopHalf + size.width * 0.02,
+      horizonY - 6,
+    )
     ..lineTo(size.width, horizonY - size.height * 0.02)
     ..close();
 
@@ -466,7 +476,11 @@ void _paintForestSide(
     final trunkHeight = lerpDoubleValue(30, 380, p);
     final trunkWidth = lerpDoubleValue(12, 110, p);
 
-    final corridorEdge = lerpDoubleValue(corridorTopHalf, corridorBottomHalf, p);
+    final corridorEdge = lerpDoubleValue(
+      corridorTopHalf,
+      corridorBottomHalf,
+      p,
+    );
     final forestOffset = lerpDoubleValue(34, 240, p);
     final cx = lerpDoubleValue(topCenterXValue, bottomCenterXValue, p);
 
@@ -504,32 +518,39 @@ void _paintSingleTree(
   double horizonY,
 ) {
   final bark = Paint()
-    ..shader = LinearGradient(
-      begin: Alignment.centerLeft,
-      end: Alignment.centerRight,
-      colors: [
-        const Color(0xFF7A4526).withValues(alpha: lerpDoubleValue(0.22, 1.0, p)),
-        const Color(0xFF9A5E36).withValues(alpha: lerpDoubleValue(0.22, 1.0, p)),
-        const Color(0xFF59311C).withValues(alpha: lerpDoubleValue(0.22, 1.0, p)),
-      ],
-    ).createShader(
-      Rect.fromLTWH(
-        x - trunkWidth / 2,
-        y - trunkHeight,
-        trunkWidth,
-        trunkHeight,
-      ),
-    );
+    ..shader =
+        LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [
+            const Color(
+              0xFF7A4526,
+            ).withValues(alpha: lerpDoubleValue(0.22, 1.0, p)),
+            const Color(
+              0xFF9A5E36,
+            ).withValues(alpha: lerpDoubleValue(0.22, 1.0, p)),
+            const Color(
+              0xFF59311C,
+            ).withValues(alpha: lerpDoubleValue(0.22, 1.0, p)),
+          ],
+        ).createShader(
+          Rect.fromLTWH(
+            x - trunkWidth / 2,
+            y - trunkHeight,
+            trunkWidth,
+            trunkHeight,
+          ),
+        );
 
   final barkDark = Paint()
-    ..color = const Color(0xFF4B2615).withValues(
-      alpha: lerpDoubleValue(0.18, 0.92, p),
-    );
+    ..color = const Color(
+      0xFF4B2615,
+    ).withValues(alpha: lerpDoubleValue(0.18, 0.92, p));
 
   final moss = Paint()
-    ..color = const Color(0xFF36563A).withValues(
-      alpha: lerpDoubleValue(0.05, 0.28, p),
-    );
+    ..color = const Color(
+      0xFF36563A,
+    ).withValues(alpha: lerpDoubleValue(0.05, 0.28, p));
 
   final rootShadow = Paint()
     ..color = Colors.black.withValues(alpha: lerpDoubleValue(0.03, 0.18, p));
@@ -604,9 +625,9 @@ void _paintSingleTree(
   );
 
   final rootPaint = Paint()
-    ..color = const Color(0xFF4D2918).withValues(
-      alpha: lerpDoubleValue(0.16, 0.55, p),
-    );
+    ..color = const Color(
+      0xFF4D2918,
+    ).withValues(alpha: lerpDoubleValue(0.16, 0.55, p));
 
   canvas.drawRRect(
     RRect.fromRectAndRadius(
@@ -649,17 +670,18 @@ void _paintDepthShade(Canvas canvas, GameRenderData data, double horizonY) {
   final size = data.size;
 
   final depthShade = Paint()
-    ..shader = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [
-        Colors.black.withValues(alpha: 0.00),
-        Colors.black.withValues(alpha: 0.05),
-        Colors.black.withValues(alpha: 0.12),
-      ],
-    ).createShader(
-      Rect.fromLTWH(0, horizonY - 4, size.width, size.height * 0.32),
-    );
+    ..shader =
+        LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.black.withValues(alpha: 0.00),
+            Colors.black.withValues(alpha: 0.05),
+            Colors.black.withValues(alpha: 0.12),
+          ],
+        ).createShader(
+          Rect.fromLTWH(0, horizonY - 4, size.width, size.height * 0.32),
+        );
 
   canvas.drawRect(
     Rect.fromLTWH(0, horizonY - 4, size.width, size.height * 0.32),
@@ -667,21 +689,26 @@ void _paintDepthShade(Canvas canvas, GameRenderData data, double horizonY) {
   );
 }
 
-void _paintFogOverDistance(Canvas canvas, GameRenderData data, double horizonY) {
+void _paintFogOverDistance(
+  Canvas canvas,
+  GameRenderData data,
+  double horizonY,
+) {
   final size = data.size;
 
   final fog = Paint()
-    ..shader = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [
-        const Color(0xFFF2E8C9).withValues(alpha: 0.18),
-        const Color(0xFFD8D3B8).withValues(alpha: 0.10),
-        Colors.transparent,
-      ],
-    ).createShader(
-      Rect.fromLTWH(0, horizonY - 16, size.width, size.height * 0.22),
-    );
+    ..shader =
+        LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            const Color(0xFFF2E8C9).withValues(alpha: 0.18),
+            const Color(0xFFD8D3B8).withValues(alpha: 0.10),
+            Colors.transparent,
+          ],
+        ).createShader(
+          Rect.fromLTWH(0, horizonY - 16, size.width, size.height * 0.22),
+        );
 
   canvas.drawRect(
     Rect.fromLTWH(0, horizonY - 16, size.width, size.height * 0.22),
