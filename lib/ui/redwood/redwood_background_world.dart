@@ -120,8 +120,7 @@ void _paintForestSide(
     final cx = lerpDoubleValue(topCenterXValue, bottomCenterXValue, p);
 
     final sway =
-        math.sin(data.worldZ * 1.8 + i * 0.9) *
-        lerpDoubleValue(0.5, 10.0, p);
+        math.sin(data.worldZ * 1.8 + i * 0.9) * lerpDoubleValue(0.5, 10.0, p);
 
     final parallax = -data.playerX * lerpDoubleValue(8.0, 32.0, p);
 
@@ -145,8 +144,7 @@ void _paintTree(
       const Color(0xFF7A4526),
       const Color(0xFF3E2315),
       1 - p,
-    )!
-        .withValues(alpha: lerpDoubleValue(0.3, 1.0, p));
+    )!.withValues(alpha: lerpDoubleValue(0.3, 1.0, p));
 
   canvas.drawRRect(
     RRect.fromRectAndRadius(
@@ -160,8 +158,7 @@ void _paintTree(
     trunk,
   );
 
-  final shadow = Paint()
-    ..color = Colors.black.withValues(alpha: 0.2 * p);
+  final shadow = Paint()..color = Colors.black.withValues(alpha: 0.2 * p);
 
   canvas.drawOval(
     Rect.fromCenter(
@@ -177,17 +174,18 @@ void _paintDepthShade(Canvas canvas, GameRenderData data, double horizonY) {
   final size = data.size;
 
   final depthShade = Paint()
-    ..shader = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [
-        Colors.transparent,
-        Colors.black.withValues(alpha: 0.05),
-        Colors.black.withValues(alpha: 0.18),
-      ],
-    ).createShader(
-      Rect.fromLTWH(0, horizonY, size.width, size.height - horizonY),
-    );
+    ..shader =
+        LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.transparent,
+            Colors.black.withValues(alpha: 0.05),
+            Colors.black.withValues(alpha: 0.18),
+          ],
+        ).createShader(
+          Rect.fromLTWH(0, horizonY, size.width, size.height - horizonY),
+        );
 
   canvas.drawRect(
     Rect.fromLTWH(0, horizonY, size.width, size.height - horizonY),
@@ -195,21 +193,26 @@ void _paintDepthShade(Canvas canvas, GameRenderData data, double horizonY) {
   );
 }
 
-void _paintFogOverDistance(Canvas canvas, GameRenderData data, double horizonY) {
+void _paintFogOverDistance(
+  Canvas canvas,
+  GameRenderData data,
+  double horizonY,
+) {
   final size = data.size;
 
   final fog = Paint()
-    ..shader = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [
-        Colors.white.withValues(alpha: 0.15),
-        Colors.white.withValues(alpha: 0.08),
-        Colors.transparent,
-      ],
-    ).createShader(
-      Rect.fromLTWH(0, horizonY - 20, size.width, size.height * 0.25),
-    );
+    ..shader =
+        LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.white.withValues(alpha: 0.15),
+            Colors.white.withValues(alpha: 0.08),
+            Colors.transparent,
+          ],
+        ).createShader(
+          Rect.fromLTWH(0, horizonY - 20, size.width, size.height * 0.25),
+        );
 
   canvas.drawRect(
     Rect.fromLTWH(0, horizonY - 20, size.width, size.height * 0.25),
