@@ -24,7 +24,7 @@ extension _GamePageRenderingAdapter on _GamePageState {
             alignment: Alignment.center,
           ),
 
-          // HACKABLE: base darken so HUD/gameplay stays readable.
+          // HACKABLE: slight darken so HUD / enemies / weapon still read.
           Container(
             color: Colors.black.withValues(alpha: 0.10),
           ),
