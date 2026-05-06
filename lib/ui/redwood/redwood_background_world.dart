@@ -29,9 +29,7 @@ void paintBackground(Canvas canvas, GameRenderData data) {
         Colors.transparent,
       ],
       stops: const [0.0, 0.24, 1.0],
-    ).createShader(
-      Rect.fromLTWH(0, 0, size.width, size.height * 0.34),
-    );
+    ).createShader(Rect.fromLTWH(0, 0, size.width, size.height * 0.34));
 
   canvas.drawRect(
     Rect.fromLTWH(0, 0, size.width, size.height * 0.34),
@@ -40,24 +38,26 @@ void paintBackground(Canvas canvas, GameRenderData data) {
 
   final horizonY = size.height * 0.39;
   final driftX = math.sin(data.worldZ * 0.012) * size.width * 0.012;
-  final centerX = size.width * 0.5 + driftX + data.travelTurn * size.width * 0.03;
+  final centerX =
+      size.width * 0.5 + driftX + data.travelTurn * size.width * 0.03;
 
   // HACKABLE: vanishing-point glow.
   final vanishingGlow = Paint()
-    ..shader = RadialGradient(
-      colors: [
-        const Color(0xFFFFF0BE).withValues(alpha: 0.22),
-        const Color(0xFFFFF0BE).withValues(alpha: 0.08),
-        Colors.transparent,
-      ],
-      stops: const [0.0, 0.28, 1.0],
-    ).createShader(
-      Rect.fromCenter(
-        center: Offset(centerX, size.height * 0.47),
-        width: size.width * 0.70,
-        height: size.height * 0.32,
-      ),
-    );
+    ..shader =
+        RadialGradient(
+          colors: [
+            const Color(0xFFFFF0BE).withValues(alpha: 0.22),
+            const Color(0xFFFFF0BE).withValues(alpha: 0.08),
+            Colors.transparent,
+          ],
+          stops: const [0.0, 0.28, 1.0],
+        ).createShader(
+          Rect.fromCenter(
+            center: Offset(centerX, size.height * 0.47),
+            width: size.width * 0.70,
+            height: size.height * 0.32,
+          ),
+        );
 
   canvas.drawOval(
     Rect.fromCenter(
@@ -175,7 +175,11 @@ void _paintForegroundPosts(
     final trunkWidth = lerpDoubleValue(26, 88, t);
 
     final cx = lerpDoubleValue(topCenterXValue, bottomCenterXValue, t);
-    final corridorHalf = lerpDoubleValue(corridorTopHalf, corridorBottomHalf, t);
+    final corridorHalf = lerpDoubleValue(
+      corridorTopHalf,
+      corridorBottomHalf,
+      t,
+    );
 
     final leftX =
         cx - corridorHalf - lerpDoubleValue(40, 82, t) - data.playerX * 20.0;
@@ -204,18 +208,13 @@ void _paintOnePost(
     ..shader = const LinearGradient(
       begin: Alignment.centerLeft,
       end: Alignment.centerRight,
-      colors: [
-        Color(0xFF6F4025),
-        Color(0xFF935B36),
-        Color(0xFF4E2D1A),
-      ],
+      colors: [Color(0xFF6F4025), Color(0xFF935B36), Color(0xFF4E2D1A)],
     ).createShader(trunkRect);
 
   final barkDark = Paint()
     ..color = const Color(0xFF4A2616).withValues(alpha: 0.90);
 
-  final rootShadow = Paint()
-    ..color = Colors.black.withValues(alpha: 0.16);
+  final rootShadow = Paint()..color = Colors.black.withValues(alpha: 0.16);
 
   canvas.drawOval(
     Rect.fromCenter(
@@ -227,10 +226,7 @@ void _paintOnePost(
   );
 
   canvas.drawRRect(
-    RRect.fromRectAndRadius(
-      trunkRect,
-      Radius.circular(trunkWidth * 0.18),
-    ),
+    RRect.fromRectAndRadius(trunkRect, Radius.circular(trunkWidth * 0.18)),
     bark,
   );
 
@@ -284,8 +280,10 @@ void _paintFloatingParticles(
     if (y < horizonY - 36 || y > size.height * 0.92) continue;
 
     final distToLight = (Offset(x, y) - lightCenter).distance;
-    final glowBoost =
-        (1.0 - (distToLight / (size.width * 0.42))).clamp(0.0, 1.0);
+    final glowBoost = (1.0 - (distToLight / (size.width * 0.42))).clamp(
+      0.0,
+      1.0,
+    );
 
     final r = lerpDoubleValue(1.2, 3.6, layer * 0.8 + glowBoost * 0.2);
     final alpha = lerpDoubleValue(0.06, 0.24, glowBoost);
@@ -318,9 +316,7 @@ void _paintFloatingParticles(
     final h = lerpDoubleValue(2, 5, p);
 
     final leafPaint = Paint()
-      ..color = (i % 3 == 0
-              ? const Color(0xFF8D6A36)
-              : const Color(0xFF6A512C))
+      ..color = (i % 3 == 0 ? const Color(0xFF8D6A36) : const Color(0xFF6A512C))
           .withValues(alpha: 0.14);
 
     canvas.drawOval(
@@ -334,17 +330,18 @@ void _paintDepthShade(Canvas canvas, GameRenderData data, double horizonY) {
   final size = data.size;
 
   final depthShade = Paint()
-    ..shader = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [
-        Colors.transparent,
-        Colors.black.withValues(alpha: 0.05),
-        Colors.black.withValues(alpha: 0.14),
-      ],
-    ).createShader(
-      Rect.fromLTWH(0, horizonY, size.width, size.height - horizonY),
-    );
+    ..shader =
+        LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.transparent,
+            Colors.black.withValues(alpha: 0.05),
+            Colors.black.withValues(alpha: 0.14),
+          ],
+        ).createShader(
+          Rect.fromLTWH(0, horizonY, size.width, size.height - horizonY),
+        );
 
   canvas.drawRect(
     Rect.fromLTWH(0, horizonY, size.width, size.height - horizonY),
@@ -360,17 +357,18 @@ void _paintFogOverDistance(
   final size = data.size;
 
   final fog = Paint()
-    ..shader = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [
-        const Color(0xFFF2E8C9).withValues(alpha: 0.16),
-        const Color(0xFFD8D3B8).withValues(alpha: 0.08),
-        Colors.transparent,
-      ],
-    ).createShader(
-      Rect.fromLTWH(0, horizonY - 20, size.width, size.height * 0.22),
-    );
+    ..shader =
+        LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            const Color(0xFFF2E8C9).withValues(alpha: 0.16),
+            const Color(0xFFD8D3B8).withValues(alpha: 0.08),
+            Colors.transparent,
+          ],
+        ).createShader(
+          Rect.fromLTWH(0, horizonY - 20, size.width, size.height * 0.22),
+        );
 
   canvas.drawRect(
     Rect.fromLTWH(0, horizonY - 20, size.width, size.height * 0.22),

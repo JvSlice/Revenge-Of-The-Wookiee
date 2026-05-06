@@ -9,9 +9,7 @@ double travelWeaponOffsetX(GameRenderData data) {
 }
 
 double travelWeaponOffsetY(GameRenderData data) {
-  return data.isTraveling
-      ? math.sin(data.travelProgress * math.pi) * 4.0
-      : 0.0;
+  return data.isTraveling ? math.sin(data.travelProgress * math.pi) * 4.0 : 0.0;
 }
 
 void paintWeapon(Canvas canvas, GameRenderData data) {
@@ -20,7 +18,8 @@ void paintWeapon(Canvas canvas, GameRenderData data) {
   final bobX = math.sin(data.bobTime * 3.2) * 4;
   final bobY = math.sin(data.bobTime * 6.4) * 3;
   final centerX = size.width / 2 + bobX + travelWeaponOffsetX(data);
-  final baseY = size.height * 0.885 +
+  final baseY =
+      size.height * 0.885 +
       bobY +
       (data.firePressed ? 4 : 0) +
       travelWeaponOffsetY(data);
@@ -43,17 +42,16 @@ void paintWeapon(Canvas canvas, GameRenderData data) {
     );
 
   canvas.drawShadow(
-    Path()
-      ..addRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromCenter(
-            center: Offset(centerX, baseY + 8),
-            width: 78,
-            height: 144,
-          ),
-          const Radius.circular(12),
+    Path()..addRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(
+          center: Offset(centerX, baseY + 8),
+          width: 78,
+          height: 144,
         ),
+        const Radius.circular(12),
       ),
+    ),
     Colors.black.withValues(alpha: 0.35),
     10,
     true,
@@ -167,10 +165,7 @@ void paintBossHealthBar(Canvas canvas, GameRenderData data) {
 
   final rect = Rect.fromLTWH(size.width * 0.18, 24, size.width * 0.64, 14);
 
-  canvas.drawRRect(
-    RRect.fromRectAndRadius(rect, const Radius.circular(7)),
-    bg,
-  );
+  canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(7)), bg);
 
   final fillWidth = rect.width * (data.bossHealth / data.bossMaxHealth);
   canvas.drawRRect(
