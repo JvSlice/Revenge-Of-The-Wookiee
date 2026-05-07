@@ -58,6 +58,7 @@ class RedwoodPainter extends CustomPainter {
     _paintEnvironmentLighting(canvas, size);
     _paintAtmosphere(canvas, size);
     _paintFloatingParticles(canvas, size);
+    _paintNearMotionDrift(canvas, size);
     _paintForegroundPosts(canvas, size);
     _paintEnemies(canvas, size);
     _paintEnemyProjectiles(canvas, size);
@@ -89,8 +90,8 @@ class RedwoodPainter extends CustomPainter {
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
-          Colors.black.withValues(alpha: 0.34),
-          Colors.black.withValues(alpha: 0.14),
+          Colors.black.withValues(alpha: 0.30),
+          Colors.black.withValues(alpha: 0.12),
           Colors.transparent,
         ],
         stops: const [0.0, 0.24, 1.0],
@@ -106,24 +107,24 @@ class RedwoodPainter extends CustomPainter {
     final vanishingGlow = Paint()
       ..shader = RadialGradient(
         colors: [
-          const Color(0xFFFFF0BE).withValues(alpha: 0.22),
-          const Color(0xFFFFF0BE).withValues(alpha: 0.08),
+          const Color(0xFFFFF0BE).withValues(alpha: 0.18),
+          const Color(0xFFFFF0BE).withValues(alpha: 0.07),
           Colors.transparent,
         ],
         stops: const [0.0, 0.28, 1.0],
       ).createShader(
         Rect.fromCenter(
           center: Offset(centerX, size.height * 0.47),
-          width: size.width * 0.70,
-          height: size.height * 0.32,
+          width: size.width * 0.68,
+          height: size.height * 0.30,
         ),
       );
 
     canvas.drawOval(
       Rect.fromCenter(
         center: Offset(centerX, size.height * 0.47),
-        width: size.width * 0.70,
-        height: size.height * 0.32,
+        width: size.width * 0.68,
+        height: size.height * 0.30,
       ),
       vanishingGlow,
     );
@@ -133,8 +134,8 @@ class RedwoodPainter extends CustomPainter {
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
-          const Color(0xFFFFF4D2).withValues(alpha: 0.10),
-          const Color(0xFFFFF4D2).withValues(alpha: 0.04),
+          const Color(0xFFFFF4D2).withValues(alpha: 0.08),
+          const Color(0xFFFFF4D2).withValues(alpha: 0.03),
           Colors.transparent,
         ],
         stops: const [0.0, 0.40, 1.0],
@@ -145,8 +146,8 @@ class RedwoodPainter extends CustomPainter {
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
-          const Color(0xFFFFF8E1).withValues(alpha: 0.07),
-          const Color(0xFFFFF8E1).withValues(alpha: 0.03),
+          const Color(0xFFFFF8E1).withValues(alpha: 0.06),
+          const Color(0xFFFFF8E1).withValues(alpha: 0.02),
           Colors.transparent,
         ],
         stops: const [0.0, 0.42, 1.0],
@@ -178,8 +179,8 @@ class RedwoodPainter extends CustomPainter {
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
-          const Color(0xFFF1E8C9).withValues(alpha: 0.16),
-          const Color(0xFFE2DBC3).withValues(alpha: 0.08),
+          const Color(0xFFF1E8C9).withValues(alpha: 0.14),
+          const Color(0xFFE2DBC3).withValues(alpha: 0.07),
           Colors.transparent,
         ],
         stops: const [0.0, 0.42, 1.0],
@@ -192,12 +193,39 @@ class RedwoodPainter extends CustomPainter {
       fog,
     );
 
+    // HACKABLE: slow lower haze drift for motion feel
+    final hazeX = math.sin(worldZ * 0.020) * size.width * 0.02;
+    final lowerHaze = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          const Color(0xFFFFF3CF).withValues(alpha: 0.07),
+          const Color(0xFFFFF3CF).withValues(alpha: 0.03),
+          Colors.transparent,
+        ],
+        stops: const [0.0, 0.52, 1.0],
+      ).createShader(
+        Rect.fromCenter(
+          center: Offset(size.width * 0.5 + hazeX, size.height * 0.72),
+          width: size.width * 0.72,
+          height: size.height * 0.24,
+        ),
+      );
+
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(size.width * 0.5 + hazeX, size.height * 0.72),
+        width: size.width * 0.72,
+        height: size.height * 0.24,
+      ),
+      lowerHaze,
+    );
+
     final sideDarkenLeft = Paint()
       ..shader = LinearGradient(
         begin: Alignment.centerLeft,
         end: Alignment.centerRight,
         colors: [
-          Colors.black.withValues(alpha: 0.20),
+          Colors.black.withValues(alpha: 0.18),
           Colors.transparent,
         ],
       ).createShader(
@@ -214,7 +242,7 @@ class RedwoodPainter extends CustomPainter {
         begin: Alignment.centerRight,
         end: Alignment.centerLeft,
         colors: [
-          Colors.black.withValues(alpha: 0.20),
+          Colors.black.withValues(alpha: 0.18),
           Colors.transparent,
         ],
       ).createShader(
@@ -231,7 +259,7 @@ class RedwoodPainter extends CustomPainter {
         colors: [
           Colors.transparent,
           Colors.transparent,
-          Colors.black.withValues(alpha: 0.24),
+          Colors.black.withValues(alpha: 0.22),
         ],
         stops: const [0.55, 0.83, 1.0],
       ).createShader(rect);
@@ -306,6 +334,54 @@ class RedwoodPainter extends CustomPainter {
       canvas.drawOval(
         Rect.fromCenter(center: Offset(x, y), width: w, height: h),
         leafPaint,
+      );
+    }
+  }
+
+  void _paintNearMotionDrift(Canvas canvas, Size size) {
+    final centerX = size.width * 0.5;
+
+    for (int i = 0; i < 18; i++) {
+      final p = (i + 1) / 18.0;
+      final y =
+          lerpDoubleValue(size.height * 0.52, size.height * 0.94, p) -
+          ((worldZ * 14 + i * 21) % 42);
+
+      final leftX =
+          centerX - lerpDoubleValue(size.width * 0.16, size.width * 0.34, p) -
+          playerX * lerpDoubleValue(2.0, 5.0, p);
+      final rightX =
+          centerX + lerpDoubleValue(size.width * 0.16, size.width * 0.34, p) -
+          playerX * lerpDoubleValue(2.0, 5.0, p);
+
+      final width = lerpDoubleValue(8, 28, p);
+      final height = lerpDoubleValue(1.2, 3.4, p);
+
+      final streakPaint = Paint()
+        ..color = const Color(0xFFFFF0C4).withValues(alpha: 0.04 + p * 0.05);
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(leftX, y),
+            width: width,
+            height: height,
+          ),
+          Radius.circular(height),
+        ),
+        streakPaint,
+      );
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(rightX, y),
+            width: width,
+            height: height,
+          ),
+          Radius.circular(height),
+        ),
+        streakPaint,
       );
     }
   }
@@ -590,10 +666,11 @@ class RedwoodPainter extends CustomPainter {
   }
 
   void _paintWeapon(Canvas canvas, Size size) {
-    final bobX = math.sin(bobTime * 3.2) * 4;
-    final bobY = math.sin(bobTime * 6.4) * 3;
+    // HACKABLE: reduced bob so motion feels less fake / floaty
+    final bobX = math.sin(bobTime * 2.6) * 1.8;
+    final bobY = math.sin(bobTime * 5.0) * 1.2;
     final centerX = size.width / 2 + bobX;
-    final baseY = size.height * 0.885 + bobY + (firePressed ? 4 : 0);
+    final baseY = size.height * 0.885 + bobY + (firePressed ? 3 : 0);
 
     final wood = Paint()..color = const Color(0xFF5A3A24);
     final darkWood = Paint()..color = const Color(0xFF3A2417);
